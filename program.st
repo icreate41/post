@@ -2,10 +2,10 @@
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
-int DATA_TYPE =0x1,BLK_REQ_SZ = 6,MAX_DAT_SZ = 262140
-int CFG_OFST = 0,DAT_OFST = 1000, COM_REQ_SZ = 16
+int DATA_TYPE =0x1,BLK_PTR_SZ = 2,BLK_TIM_SZ = 2,BLK_REQ_SZ = 6,MAX_DAT_SZ = 262140
+int CFG_OFST = 0,DAT_OFST = 1000, COM_OFST = 100, COM_REQ_SZ = 16
 int MAX_PRG_CNT = 500, MAX_STP_CNT = 500
-int BLK_SZ,MAX_BLK_CNT,PRG_COM_BLK_SZ
+int BLK_SZ,MAX_BLK_CNT,COM_SZ,PRG_COM_BLK_SZ
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
 short BLK_CNT,NIL = -1
@@ -16,11 +16,12 @@ bool TRY_IGNORE = 0,RES_STATE = 1
 sub init_values()
   RES_STATE = 1
   BLK_REQ_SZ  = BLK_REQ_SZ -(BLK_REQ_SZ -128)*(BLK_REQ_SZ > 128)  
-  BLK_SZ      = BLK_REQ_SZ +4
+  BLK_SZ      = BLK_REQ_SZ +BLK_PTR_SZ +BLK_TIM_SZ //check this shit
   MAX_BLK_CNT = MAX_DAT_SZ /BLK_SZ
   MAX_BLK_CNT = MAX_BLK_CNT -(MAX_BLK_CNT -24576)*(MAX_BLK_CNT > 24576)
   COM_REQ_SZ  = COM_REQ_SZ -(COM_REQ_SZ -128)*(COM_REQ_SZ > 128)
-  PRG_COM_BLK_SZ = (COM_REQ_SZ +1 + BLK_SZ -1)/BLK_SZ
+  COM_SZ      = COM_REQ_SZ + 0x1 //fixme
+  PRG_COM_BLK_SZ = (COM_SZ + (BLK_SZ -1))/BLK_SZ
   BLK_CNT = 0
   P_HEAD_BLK = 0
   P_CUR_BLK  = 1
@@ -62,6 +63,25 @@ sub load_config()
   
   GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
 end sub
+sub load_block_data(int blk, int req) //todo validate with bitmap, prev and set next
+  short prv,nxt,word,i,bc = 0
+  RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)  
+  while(bc < req and RES_STATE)
+  	for i = BLK_PTR_SZ to BLK_SZ -1
+  	  GetData(word,"Local HMI",RW,DAT_OFST+BLK_SZ*blk+i,1)
+  	  SetData(word,"Local HMI",LW,COM_OFST+(BLK_SZ -BLK_PTR_SZ)*bc+i,1)
+  	next
+  	GetData(nxt,"Local HMI",RW,DAT_OFST+BLK_SZ*blk+1,1)
+  	blk = nxt
+  	
+  	RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT) //fix this
+  	bc = bc + RES_STATE
+  wend
+  RES_STATE = RES_STATE and(bc == req)
+end sub
+sub load_com() //todo
+  
+end sub
 sub switch_sel(int what)
   P_HEAD_BLK = what*5 +0
   P_CUR_BLK  = what*5 +1
@@ -69,7 +89,7 @@ sub switch_sel(int what)
   P_PREV_BLK = what*5 +3
   P_NEXT_BLK = what*5 +4
 end sub
-sub load_step_head() //без авто переключения
+sub load_step_head()
   if(RES_STATE) then
   	FILL(ST[5],NIL,5)
     GetData(ST[5],"Local HMI",RW,DAT_OFST+BLK_SZ*ST[P_CUR_BLK]+2,1) 
@@ -290,7 +310,6 @@ macro_command main()
   int loaded_progs = 0
   ST[P_NEXT_BLK] = ST[P_HEAD_BLK]
   while(ST[P_NEXT_BLK] <> NIL and RES_STATE)
-  	switch_sel(SEL_PRG)
     set_block(ST[P_NEXT_BLK])
     load_node(ST[P_NEXT_BLK], ST[P_CUR_BLK])
 
@@ -305,7 +324,9 @@ macro_command main()
   	  loaded_steps = loaded_steps + RES_STATE
   	  RES_STATE = RES_STATE and(loaded_steps <= MAX_STP_CNT)
 	wend
-	RES_STATE = RES_STATE and(loaded_steps >= PRG_COM_BLK_SZ)
+	load_block_data(ST[P_HEAD_BLK],PRG_COM_BLK_SZ)
+	load_com()
+	switch_sel(SEL_PRG)
   	loaded_progs = loaded_progs + RES_STATE
   	RES_STATE = RES_STATE and(loaded_progs <= MAX_PRG_CNT)	
   wend
