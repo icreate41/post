@@ -9,8 +9,8 @@ int BLK_SZ,MAX_BLK_CNT,COM_SZ,PRG_COM_BLK_SZ
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
 short BLK_CNT,NIL = -1
-short P_HEAD_BLK=0,P_NEW_BLK=1,P_CUR_BLK=2,P_PREV_BLK=3,P_NEXT_BLK=4
-short ST[10],SEL_PRG=0,SEL_STPS=1
+short P_COUNT,P_HEAD_BLK,P_NEW_BLK,P_CUR_BLK,P_PREV_BLK,P_NEXT_BLK
+short ST[36],TYP_PRG=0,TYP_STPS=1,SLT_LOAD=0,SLT_VIEW=1,SLT_RUN=2
 bool  RES_STATE = 1
 //-------------------------------------------------------------
 sub init_values()
@@ -23,21 +23,27 @@ sub init_values()
   COM_SZ      = COM_ADD_SZ +COM_REQ_SZ
   PRG_COM_BLK_SZ = (COM_SZ +(BLK_SZ -1))/BLK_SZ
   BLK_CNT = 0
-  P_HEAD_BLK = 0
-  P_NEW_BLK  = 1  
-  P_CUR_BLK  = 2
-  P_PREV_BLK = 3
-  P_NEXT_BLK = 4 
-  FILL(ST[0],NIL,10)
+  P_COUNT    = 0 //подряд удобнее же
+  P_HEAD_BLK = 6
+  P_NEW_BLK  = 12  
+  P_CUR_BLK  = 18
+  P_PREV_BLK = 24
+  P_NEXT_BLK = 30
+  FILL(ST[0],0,6)
+  FILL(ST[6],NIL,30)
   FILL(BITMAP[0],-1,793)
 end sub
 //-------------------------------------------------------------
-sub switch_sel(int what)
-  P_HEAD_BLK = what*5 +0
-  P_NEW_BLK  = what*5 +1
-  P_CUR_BLK  = what*5 +2
-  P_PREV_BLK = what*5 +3
-  P_NEXT_BLK = what*5 +4
+sub switch(int type, int slot)
+  P_COUNT    = 0  + 3*type + slot
+  P_HEAD_BLK = 6  + 3*type + slot*type
+  P_NEW_BLK  = 12 + 3*type + slot + (not slot)
+  P_CUR_BLK  = 18 + 3*type + slot
+  P_PREV_BLK = 24 + 3*type + slot
+  P_NEXT_BLK = 30 + 3*type + slot
+end sub
+//-------------------------------------------------------------
+sub slot_copy(int src, int dst) //todo
 end sub
 //-------------------------------------------------------------
 sub load_config_s()
@@ -70,6 +76,7 @@ sub load_config_s()
   SetData(COM_REQ_SZ  ,"Local HMI",RW,CFG_OFST+16,1)
   RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
   GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
+  GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
 end sub
 //-------------------------------------------------------------
 sub load_data_s(int blk, int prv, int req, int addr)
@@ -98,10 +105,22 @@ sub load_prg_com_s() //todo
   
 end sub
 //-------------------------------------------------------------
-sub load_step_head_s()
+sub load_step_head_s() //todo with ST
+  //P_COUNT    = 0  + 3*1 + 0
+  //P_HEAD_BLK = 6  + 3*1 + 0*type
+  //P_NEW_BLK  = 12 + 3*1 + 0 + (not slot)
+  //P_CUR_BLK  = 18 + 3*1 + 0
+  //P_PREV_BLK = 24 + 3*1 + 0
+  //P_NEXT_BLK = 30 + 3*1 + 0
   if(RES_STATE) then
-  	FILL(ST[5],NIL,5)
-    GetData(ST[5],"Local HMI",RW,DAT_OFST+BLK_SZ*ST[P_CUR_BLK]+2,1) 
+    ST[3 ] = 0
+    ST[9 ] = NIL
+    ST[15] = NIL
+    ST[21] = NIL
+    ST[27] = NIL
+    ST[33] = NIL
+  	//FILL ??
+    GetData(ST[9],"Local HMI",RW,DAT_OFST+BLK_SZ*ST[P_CUR_BLK]+BLK_HDR_SZ,1) 
   end if  
 end sub
 //-------------------------------------------------------------
@@ -325,8 +344,8 @@ macro_command main()
     set_block_s(ST[P_NEXT_BLK])
     load_node_s(ST[P_NEXT_BLK], ST[P_CUR_BLK])
 
-	load_step_head_s()
-	switch_sel(SEL_STPS)
+	load_step_head_s()//вниз ??
+	switch(TYP_STPS, SLT_LOAD)
 	ST[P_NEXT_BLK] = ST[P_HEAD_BLK]
 	
 	int loaded_steps = 0
@@ -336,9 +355,10 @@ macro_command main()
   	  loaded_steps = loaded_steps + RES_STATE
   	  RES_STATE = RES_STATE and(loaded_steps <= MAX_STP_CNT)
 	wend
-	load_data_s(ST[P_HEAD_BLK],NIL,PRG_COM_BLK_SZ,100)
+	RES_STATE = RES_STATE and(loaded_steps > PRG_COM_BLK_SZ)
+	load_data_s(ST[P_HEAD_BLK],NIL,PRG_COM_BLK_SZ,100) //PRG_COM_BLK_SZ +1 вместро строчки выше ?
 	load_prg_com_s()
-	switch_sel(SEL_PRG)
+	switch(TYP_PRG, SLT_LOAD)
   	loaded_progs = loaded_progs + RES_STATE
   	RES_STATE = RES_STATE and(loaded_progs <= MAX_PRG_CNT)	
   wend
