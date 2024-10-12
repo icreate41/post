@@ -8,7 +8,7 @@ int MAX_PRG_CNT = 500, MAX_STP_CNT = 500
 int BLK_SZ,MAX_BLK_CNT,COM_SZ,PRG_COM_BLK_SZ
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
-short BLK_CNT,NIL = -1
+short BUFF[256],BLK_CNT,NIL = -1
 short P_COUNT,P_HEAD_BLK,P_NEW_BLK,P_CUR_BLK,P_PREV_BLK,P_NEXT_BLK
 short ST[36],TYP_PRG=0,TYP_STPS=1,SLT_LOAD=0,SLT_VIEW=1,SLT_RUN=2
 bool  RES_STATE = 1
@@ -23,12 +23,12 @@ sub init_values()
   COM_SZ      = COM_ADD_SZ +COM_REQ_SZ
   PRG_COM_BLK_SZ = (COM_SZ +(BLK_SZ -1))/BLK_SZ
   BLK_CNT = 0
-  P_COUNT    = 0 //подряд удобнее же
+  P_COUNT    = 0
   P_HEAD_BLK = 6
-  P_NEW_BLK  = 12  
-  P_CUR_BLK  = 18
-  P_PREV_BLK = 24
-  P_NEXT_BLK = 30
+  P_NEW_BLK  = 7  
+  P_CUR_BLK  = 8
+  P_PREV_BLK = 9
+  P_NEXT_BLK = 10
   FILL(ST[0],0,6)
   FILL(ST[6],NIL,30)
   FILL(BITMAP[0],-1,793)
@@ -36,14 +36,59 @@ end sub
 //-------------------------------------------------------------
 sub switch(int type, int slot)
   P_COUNT    = 0  + 3*type + slot
-  P_HEAD_BLK = 6  + 3*type + slot*type
-  P_NEW_BLK  = 12 + 3*type + slot + (not slot)
-  P_CUR_BLK  = 18 + 3*type + slot
-  P_PREV_BLK = 24 + 3*type + slot
-  P_NEXT_BLK = 30 + 3*type + slot
+  P_HEAD_BLK = 6  + 5*(3*type + slot *type)
+  P_NEW_BLK  = 7  + 5*(3*type + slot +(not slot))
+  P_CUR_BLK  = 8  + 5*(3*type + slot)
+  P_PREV_BLK = 9  + 5*(3*type + slot)
+  P_NEXT_BLK = 10 + 5*(3*type + slot)
 end sub
 //-------------------------------------------------------------
-sub slot_copy(int src, int dst) //todo
+sub slot_copy(int type, int src, int dst)
+  int s,d,p
+  s = 0 + 3*type + src
+  d = 0 + 3*type + dst
+  ST[d] = ST[s]
+  for p = 0 to 4
+  	s = 6 + p + 5*(3*type + src)
+  	d = 6 + p + 5*(3*type + dst)
+  	ST[d] = ST[s]
+  next
+end sub
+//-------------------------------------------------------------
+sub load_stp_head_from_cur_s()
+  if(RES_STATE) then
+    ST[3] = 0 //P_COUNT    = 0  + 3*type + slot = 0 + 3
+    FILL(ST[21],NIL,5) //P_HEAD_BLK = 6  + 5*(3*type + slot) = 6 + 15
+    GetData(ST[21],"Local HMI",RW,DAT_OFST+BLK_HDR_SZ+BLK_SZ*ST[P_CUR_BLK],1) 
+  end if  
+end sub
+//-------------------------------------------------------------
+sub parse_prg_com_s() //todo
+  
+end sub
+//-------------------------------------------------------------
+sub load_data_s(int blk, int prv, int req) 
+  short tmp_prv,tmp_nxt,i,j,dc = 0
+  RES_STATE = RES_STATE and(req <= 256)
+  while(dc < req and RES_STATE)
+  	RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
+    if(RES_STATE) then
+  	  GetData(tmp_prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
+  	  GetData(tmp_nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
+  	  j = blk % 32
+  	  i = blk / 32 + BO[0]
+  	  RES_STATE = RES_STATE and(BITMAP[i] & (1 << j))
+  	  RES_STATE = RES_STATE and(tmp_prv == prv)
+  	  i = BLK_SZ - BLK_HDR_SZ
+  	  while(dc < req and i > 0)
+  	    GetData(BUFF[dc],"Local HMI",RW,DAT_OFST+i+BLK_SZ*blk,1)
+  	    i  = i  -1
+  	    dc = dc +1
+  	  wend
+  	  prv = blk
+  	  blk = tmp_nxt
+	end if
+  wend
 end sub
 //-------------------------------------------------------------
 sub load_config_s()
@@ -77,51 +122,6 @@ sub load_config_s()
   RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
   GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
   GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
-end sub
-//-------------------------------------------------------------
-sub load_data_s(int blk, int prv, int req, int addr)
-  short tmp_prv,tmp_nxt,word,i,j,bc = 0
-  while(bc < req and RES_STATE)
-  	RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
-    if(RES_STATE) then
-  	  GetData(tmp_prv,"Local HMI",RW,DAT_OFST+BLK_SZ*blk+0,1)
-  	  GetData(tmp_nxt,"Local HMI",RW,DAT_OFST+BLK_SZ*blk+1,1)
-  	  j = blk % 32
-  	  i = blk / 32 + BO[0]
-  	  RES_STATE = RES_STATE and(BITMAP[i] & (1 << j))
-  	  RES_STATE = RES_STATE and(tmp_prv == prv)
-  	  for i = BLK_HDR_SZ to BLK_SZ -1
-  	    GetData(word,"Local HMI",RW,DAT_OFST+i+BLK_SZ*blk,1)
-  	    SetData(word,"Local HMI",LW,addr+i+(BLK_SZ -BLK_HDR_SZ)*bc,1)
-  	  next
-  	  prv = blk
-  	  blk = tmp_nxt	  
-	end if
-  	bc = bc + RES_STATE
-  wend
-end sub
-//-------------------------------------------------------------
-sub load_prg_com_s() //todo
-  
-end sub
-//-------------------------------------------------------------
-sub load_step_head_s() //todo with ST
-  //P_COUNT    = 0  + 3*1 + 0
-  //P_HEAD_BLK = 6  + 3*1 + 0*type
-  //P_NEW_BLK  = 12 + 3*1 + 0 + (not slot)
-  //P_CUR_BLK  = 18 + 3*1 + 0
-  //P_PREV_BLK = 24 + 3*1 + 0
-  //P_NEXT_BLK = 30 + 3*1 + 0
-  if(RES_STATE) then
-    ST[3 ] = 0
-    ST[9 ] = NIL
-    ST[15] = NIL
-    ST[21] = NIL
-    ST[27] = NIL
-    ST[33] = NIL
-  	//FILL ??
-    GetData(ST[9],"Local HMI",RW,DAT_OFST+BLK_SZ*ST[P_CUR_BLK]+BLK_HDR_SZ,1) 
-  end if  
 end sub
 //-------------------------------------------------------------
 sub load_node_s(int blk, int prv_blk)
@@ -338,29 +338,26 @@ macro_command main()
 	
   return
   
-  int loaded_progs = 0
   ST[P_NEXT_BLK] = ST[P_HEAD_BLK]
   while(ST[P_NEXT_BLK] <> NIL and RES_STATE)
     set_block_s(ST[P_NEXT_BLK])
     load_node_s(ST[P_NEXT_BLK], ST[P_CUR_BLK])
-
-	load_step_head_s()//вниз ??
+	load_stp_head_from_cur_s()
 	switch(TYP_STPS, SLT_LOAD)
 	ST[P_NEXT_BLK] = ST[P_HEAD_BLK]
-	
-	int loaded_steps = 0
+	ST[P_COUNT] = 0
 	while(ST[P_NEXT_BLK] <> NIL and RES_STATE)
       set_block_s(ST[P_NEXT_BLK])
       load_node_s(ST[P_NEXT_BLK], ST[P_CUR_BLK])
-  	  loaded_steps = loaded_steps + RES_STATE
-  	  RES_STATE = RES_STATE and(loaded_steps <= MAX_STP_CNT)
+  	  ST[P_COUNT] = ST[P_COUNT] + RES_STATE
+  	  RES_STATE = RES_STATE and(ST[P_COUNT] <= MAX_STP_CNT)
 	wend
-	RES_STATE = RES_STATE and(loaded_steps > PRG_COM_BLK_SZ)
-	load_data_s(ST[P_HEAD_BLK],NIL,PRG_COM_BLK_SZ,100) //PRG_COM_BLK_SZ +1 вместро строчки выше ?
-	load_prg_com_s()
+	RES_STATE = RES_STATE and(ST[P_COUNT] > PRG_COM_BLK_SZ)
+	load_data_s(ST[P_HEAD_BLK],NIL,COM_ADD_SZ)
+	parse_prg_com_s()
 	switch(TYP_PRG, SLT_LOAD)
-  	loaded_progs = loaded_progs + RES_STATE
-  	RES_STATE = RES_STATE and(loaded_progs <= MAX_PRG_CNT)	
+  	ST[P_COUNT] = ST[P_COUNT] + RES_STATE
+  	RES_STATE = RES_STATE and(ST[P_COUNT] <= MAX_PRG_CNT)
   wend
   
   if not(RES_STATE) then
