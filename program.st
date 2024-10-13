@@ -515,7 +515,7 @@ macro_command main()
     while(RES_STATE and SW[W_NXT_BLK] > NIL)
       set_block_s(SW[W_NXT_BLK])
       load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
-      //TRACE("loaded: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      TRACE("   loaded: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
       RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
     wend
     reload_node_s(SW[W_HEAD_BLK],NIL) //to begin, safe version of //advance_s(DIR_LEFT*(SW[W_BLK_CNT] -1))
@@ -530,7 +530,7 @@ macro_command main()
       TRACE("OK - #1 load test")
     end if
     //2nd
-    if(RES_STATE) then
+    if(true and RES_STATE) then
       test_count = test_count +1
       TRACE("#2 insert test")
       ii = SW[W_BLK_CNT] +1
@@ -539,19 +539,55 @@ macro_command main()
       reload_node_s(SW[W_HEAD_BLK],NIL)
       if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
         advance_s(DIR_RIGHT*ij)
+        TRACE("insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         new_block_s()
         set_block_s(RES_BLK)
         insert_node_s(RES_BLK)
-        TRACE("insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
       end if
       //end-----------------------------------------------------------------
       TRACE("count %d",SW[W_BLK_CNT])
+      //view
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      while(RES_STATE and SW[W_CUR_BLK] > NIL)
+        TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        advance_s(DIR_RIGHT)
+      wend      
       //check result
       if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
         TRACE("Failed - #2 insert test, breaking...")
       else
         passed_count = passed_count +1
         TRACE("OK - #2 insert test")
+      end if      
+    end if
+    //3rd
+    if(true and RES_STATE) then
+      test_count = test_count +1
+      TRACE("#3 deletion test")
+      ii = SW[W_BLK_CNT] -1
+      ij = 3 //deletion position
+      //begin---------------------------------------------------------------
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      if(ij >= 0 and ij < SW[W_BLK_CNT]) then
+        advance_s(DIR_RIGHT*ij)
+        TRACE("deletion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        erase_node_s()
+        del_block_s(RES_BLK)
+      end if
+      //end-----------------------------------------------------------------
+      TRACE("count %d",SW[W_BLK_CNT])
+      //view
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      while(RES_STATE and SW[W_CUR_BLK] > NIL)
+        TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        advance_s(DIR_RIGHT)
+      wend        
+      //check result
+      if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+        TRACE("Failed - #3 deletion test, breaking...")
+      else
+        passed_count = passed_count +1
+        TRACE("OK - #3 deletion test")
       end if      
     end if
     init_values()
