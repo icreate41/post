@@ -194,8 +194,10 @@ sub advance_s(short shift)
   wend
 end sub
 //-------------------------------------------------------------
-sub insert_node_s(short blk, short dir)
+sub insert_node_s(short blk) //shift_next
   short prv,nxt,chk
+  RES_STATE = RES_STATE and not((SW[W_PRV_BLK]> NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
+  RES_STATE = RES_STATE and not((SW[W_PRV_BLK]<=NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
   if not(RES_STATE) then
     return
   end if  
@@ -223,36 +225,7 @@ sub insert_node_s(short blk, short dir)
   SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
 end sub
 //-------------------------------------------------------------
-sub insert_node_shift_next_s(short blk) //это же вставка слева и надо проверить на ошибки
-  short prv,nxt,chk
-  if not(RES_STATE) then
-    return
-  end if  
-  if(SW[W_PRV_BLK] > NIL) then
-    GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
-    chk = prv ^ blk
-    SetData(blk,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
-    SetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
-  else
-    SW[W_HEAD_BLK] = blk
-    SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-  end if
-  if(SW[W_CUR_BLK] > NIL) then
-    SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
-    GetData(nxt ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
-    chk = nxt ^ blk
-    SetData(chk ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
-  end if
-  SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
-  SW[W_NXT_BLK] = SW[W_CUR_BLK]
-  SW[W_CUR_BLK] = blk
-  chk = SW[W_PRV_BLK] ^ SW[W_NXT_BLK]
-  SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
-  SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
-  SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
-end sub
-//-------------------------------------------------------------
-sub del_node_shift_next_s()
+sub erase_node_s() //shift_next
   short prv,nxt,chk
   RES_STATE = RES_STATE and(SW[W_CUR_BLK] > NIL)
   if not(RES_STATE) then
@@ -266,7 +239,7 @@ sub del_node_shift_next_s()
     SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
     SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
   else
-    SW[W_HEAD_BLK] =  SW[W_PRV_BLK]
+    SW[W_HEAD_BLK] = SW[W_NXT_BLK]
     SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)   
   end if
   if(SW[W_NXT_BLK] > NIL) then
@@ -450,7 +423,7 @@ macro_command main()
   	for ii = 0 to 999
         new_block_s()
   		set_block_s(NEW_BLK)
-  		insert_node_shift_next_s(NEW_BLK)
+  		insert_node_s(NEW_BLK)
   		//del_block_s(NEW_BLK)
   		//set_block_s(NEW_BLK)
   	next
@@ -478,7 +451,7 @@ macro_command main()
     for ii = 0 to 2
       new_block_s()
       set_block_s(NEW_BLK)
-      insert_node_shift_next_s(NEW_BLK)
+      insert_node_s(NEW_BLK)
       TRACE("insert  [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
       advance_s(1)
       TRACE("advance [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
