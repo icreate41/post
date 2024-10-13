@@ -8,9 +8,13 @@ int MAX_PRG_CNT = 500, MAX_STP_CNT = 500
 int BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793],SD[2]
-short BUFF[256],SW[10],BLK_CNT,NEW_BLK,NIL = -1
+short BUFF[256],SW[10],BLK_CNT,RES_BLK,NIL = -1
+//todo
 //подумай на счёт того, чтобы добавить owner и modified флаг
+//возможно стоит вернуть слоты, но только меняя CUR_BLK,PRV_BLK,NXT_BLK (Owner ??)
+//todo
 short D_HEAD_LOC,W_BLK_CNT,W_HEAD_BLK,W_CUR_BLK,W_PRV_BLK,W_NXT_BLK
+short DIR_LEFT = -1,DIR_RIGHT =1
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
@@ -27,7 +31,7 @@ sub init_values()
   COM_BLK_CNT  =(COM_REQ_SZ +(BLK_SZ -1))/BLK_SZ
   COM_BLK_CNT  = COM_BLK_CNT+COM_BLK_OFST
   BLK_CNT = 0
-  NEW_BLK = -1
+  RES_BLK = -1
   D_HEAD_LOC = 0
   W_BLK_CNT  = 0
   W_HEAD_BLK = 2
@@ -79,6 +83,9 @@ sub get_prg_com_from_cur_s()
   end if
 end sub
 //-------------------------------------------------------------
+//todo
+//delete bit check ??
+//todo
 sub load_data_s(int blk, int req)
   short i,j,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and(req <= 256)
@@ -134,14 +141,34 @@ sub load_config_s()
   RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
 end sub
 //-------------------------------------------------------------
-sub load_node_s(short blk) //возможно не нужна
+sub reload_node_s(short blk, short prev_blk)
+  short prv,nxt,chk
+  prv = NIL
+  nxt = NIL
+  RES_STATE = RES_STATE and(blk >= NIL)and(blk < MAX_BLK_CNT)
+  if(RES_STATE and blk > NIL) then
+    GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
+    GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
+    GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*blk,1)
+    RES_STATE = RES_STATE and(prv == prev_blk)
+    RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
+    RES_STATE = RES_STATE and(chk == (prv ^ nxt))
+  end if
+  if(RES_STATE) then
+    SW[W_CUR_BLK] = blk
+    SW[W_PRV_BLK] = prv
+    SW[W_NXT_BLK] = nxt  
+  end if
+end sub
+//-------------------------------------------------------------
+sub load_node_s(short blk, short prev_blk)
   short prv,nxt,chk
   RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
   if(RES_STATE) then
     GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
     GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
     GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*blk,1)
-    RES_STATE = RES_STATE and(prv >= NIL)and(prv < MAX_BLK_CNT)
+    RES_STATE = RES_STATE and(prv == prev_blk)
     RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
     RES_STATE = RES_STATE and(chk == (prv ^ nxt))
   end if
@@ -248,6 +275,7 @@ sub erase_node_s() //shift_next
     chk = nxt ^ SW[W_PRV_BLK]
     SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_NXT_BLK],1)
   end if
+  RES_BLK = SW[W_CUR_BLK]
   SW[W_BLK_CNT] = SW[W_BLK_CNT] -1
   SW[W_CUR_BLK] = SW[W_NXT_BLK]
   SW[W_NXT_BLK] = nxt
@@ -296,7 +324,7 @@ sub new_block_s()
   int k,s,m,b=0,res=0
   RES_STATE = RES_STATE and(BLK_CNT < MAX_BLK_CNT)
   if not(RES_STATE) then
-    NEW_BLK = NIL
+    RES_BLK = NIL
     return
   end if 
   for k = 2 down 0 
@@ -317,7 +345,7 @@ sub new_block_s()
     POW(32,k,m)   
     res = res + b*m
   next
-  NEW_BLK = res
+  RES_BLK = res
 end sub
 //-------------------------------------------------------------
 //-------------------------------------------------------------
@@ -330,7 +358,7 @@ macro_command main()
   load_config_s()
 
   //testing cases
-  int ii,test_count = 0, passed_count = 0
+  int ii,ij,test_count = 0, passed_count = 0
   //######################################################################## 
   if(true) then //testing bitmap loading with value = 3205
     test_count = test_count +1
@@ -388,8 +416,8 @@ macro_command main()
     BITMAP[771] = 1 << 4 // 100  /32 = 3 (+768)   , 100  %32 = 4
     BITMAP[792] = 1 << 3 // 3    /32 = 0 (+768+24), 3    %32 = 3
     new_block_s() //try...
-    if(NEW_BLK <> 3205 or not RES_STATE) then
-      TRACE("Failed, incorrect value %d", NEW_BLK)
+    if(RES_BLK <> 3205 or not RES_STATE) then
+      TRACE("Failed, incorrect value %d", RES_BLK)
     else
       passed_count = passed_count +1
       TRACE("OK")
@@ -422,10 +450,10 @@ macro_command main()
   	//while(BLK_CNT < MAX_BLK_CNT) //try...
   	for ii = 0 to 999
         new_block_s()
-  		set_block_s(NEW_BLK)
-  		insert_node_s(NEW_BLK)
-  		//del_block_s(NEW_BLK)
-  		//set_block_s(NEW_BLK)
+  		set_block_s(RES_BLK)
+  		insert_node_s(RES_BLK)
+  		//del_block_s(RES_BLK)
+  		//set_block_s(RES_BLK)
   	next
   	//wend
   	GetData(stop,"Local HMI",LW,9030,1)
@@ -433,7 +461,7 @@ macro_command main()
   	TRACE("time =  %f s", res)
   	res = BLK_CNT/res
   	TRACE("perf =  %f op/s", res)	
-  	TRACE("last block %d", NEW_BLK)
+  	TRACE("last block %d", RES_BLK)
   	TRACE("count %d", BLK_CNT)
     if not(RES_STATE) then
       TRACE("Failed")
@@ -444,30 +472,90 @@ macro_command main()
   	init_values()
   end if
   //######################################################################## 
-  if(true) then //testing creation
+  if(true) then //testing node functions
     test_count = test_count +1
-    TRACE("Test case creation")
-    
+    TRACE("Testing node functions")
     for ii = 0 to 2
       new_block_s()
-      set_block_s(NEW_BLK)
-      insert_node_s(NEW_BLK)
-      TRACE("insert  [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
+      set_block_s(RES_BLK)
+      insert_node_s(RES_BLK)
       advance_s(1)
-      TRACE("advance [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
     next
-    advance_s(0 - ii -1)
-    TRACE("advance [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
-    TRACE("count %d", BLK_CNT)
-     
-    if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+    advance_s(-2) //advance_s(0 - ii)
+    erase_node_s()
+    del_block_s(RES_BLK)
+    
+    //TRACE("delete  [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])     
+    if(SW[W_BLK_CNT] <> (ii -1) or not RES_STATE) then
       TRACE("Failed")
     else
       passed_count = passed_count +1
       TRACE("OK")
     end if
     init_values()
-  end if   
+  end if
+  //######################################################################## 
+  if(true) then //Combine test
+    test_count = test_count +1
+    TRACE("Combine test")
+    TRACE("#1 load test")
+    //firstly create list of 5 nodes
+    ii = 5
+    while(SW[W_BLK_CNT] < ii)
+      new_block_s()
+      set_block_s(RES_BLK)
+      insert_node_s(RES_BLK)
+    wend
+    //than clear data
+    init_values()
+    //and read saved list
+    //begin-----------------------------------------------------------------
+    GetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+    SW[W_NXT_BLK] = SW[W_HEAD_BLK]
+    while(RES_STATE and SW[W_NXT_BLK] > NIL)
+      set_block_s(SW[W_NXT_BLK])
+      load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
+      //TRACE("loaded: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
+    wend
+    reload_node_s(SW[W_HEAD_BLK],NIL) //to begin, safe version of //advance_s(DIR_LEFT*(SW[W_BLK_CNT] -1))
+    //end-------------------------------------------------------------------
+    TRACE("begin: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+    TRACE("count %d",SW[W_BLK_CNT])
+    //check result
+    if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+      TRACE("Failed - #1 load test, breaking...")
+    else
+      passed_count = passed_count +1
+      TRACE("OK - #1 load test")
+    end if
+    //2nd
+    if(RES_STATE) then
+      test_count = test_count +1
+      TRACE("#2 insert test")
+      ii = SW[W_BLK_CNT] +1
+      ij = 3 //insert position
+      //begin---------------------------------------------------------------
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
+        advance_s(DIR_RIGHT*ij)
+        new_block_s()
+        set_block_s(RES_BLK)
+        insert_node_s(RES_BLK)
+        TRACE("insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      end if
+      //end-----------------------------------------------------------------
+      TRACE("count %d",SW[W_BLK_CNT])
+      //check result
+      if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+        TRACE("Failed - #2 insert test, breaking...")
+      else
+        passed_count = passed_count +1
+        TRACE("OK - #2 insert test")
+      end if      
+    end if
+    init_values()
+  end if  
   //########################################################################
   if(test_count > 0) then
     if(passed_count == test_count) then
@@ -484,14 +572,14 @@ macro_command main()
   SW[W_BLK_CNT] = 0
   while(SW[W_NXT_BLK] > NIL and RES_STATE)
     set_block_s(SW[W_NXT_BLK])
-    load_node_s(SW[W_NXT_BLK])
+    load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
 	load_stp_from_prg_s()
 	switch_type(TYP_STP)
 	SW[W_NXT_BLK] = SW[W_HEAD_BLK]
 	SW[W_BLK_CNT] = 0
 	while(SW[W_NXT_BLK] > NIL and RES_STATE)
       set_block_s(SW[W_NXT_BLK])
-      load_node_s(SW[W_NXT_BLK])
+      load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
   	  RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_STP_CNT +COM_BLK_CNT)
 	wend
 	RES_STATE = RES_STATE and(SW[W_BLK_CNT] > COM_BLK_CNT)
