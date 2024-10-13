@@ -5,16 +5,15 @@ int HEADER = 0x66FFC0DE,VERSION = 0x1
 int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 6 ,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,TMP_OFST = 100,COM_ADD_SZ = 10,COM_REQ_SZ = 16
 int MAX_PRG_CNT = 500, MAX_STP_CNT = 500
-int BLK_SZ,MAX_BLK_CNT,COM_SZ,PRG_COM_BLK_SZ
+int BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT
 //-------------------------------------------------------------
-int BO[3] = {0, 768, 792}, BITMAP[793]
-short BUFF[256],BLK_CNT,NIL = -1
-short P_BLK_CNT,P_HEAD_BLK,P_NEW_BLK,P_CUR_BLK,P_PRV_BLK,P_NXT_BLK
-short ST[36],TYP_PRG=0,TYP_STPS=1,SLT_LOAD=0,SLT_VIEW=1,SLT_RUN=2
+int BO[3] = {0, 768, 792}, BITMAP[793],SD[2]
+short BUFF[256],SW[10],BLK_CNT,NEW_BLK,NIL = -1
+short D_HEAD_LOC,W_BLK_CNT,W_HEAD_BLK,W_CUR_BLK,W_PRV_BLK,W_NXT_BLK
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
-bool  RES_STATE = 1
+bool  RES_STATE = 1,TYP_PRG=0,TYP_STP=1
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
@@ -22,52 +21,43 @@ sub init_values()
   BLK_SZ      = BLK_HDR_SZ +STP_ADD_SZ +STP_REQ_SZ
   MAX_BLK_CNT = MAX_DAT_SZ /BLK_SZ
   MAX_BLK_CNT = MAX_BLK_CNT -(MAX_BLK_CNT -24576)*(MAX_BLK_CNT > 24576)
-  COM_REQ_SZ  = COM_REQ_SZ -(COM_REQ_SZ -128)*(COM_REQ_SZ > 128)
-  COM_SZ      = COM_ADD_SZ +COM_REQ_SZ
-  PRG_COM_BLK_SZ = (COM_SZ +(BLK_SZ -1))/BLK_SZ
+  COM_REQ_SZ   = COM_REQ_SZ -(COM_REQ_SZ -128)*(COM_REQ_SZ > 128)
+  COM_BLK_OFST =(COM_ADD_SZ +(BLK_SZ -1))/BLK_SZ
+  COM_BLK_CNT  =(COM_REQ_SZ +(BLK_SZ -1))/BLK_SZ
+  COM_BLK_CNT  = COM_BLK_CNT+COM_BLK_OFST
+  BLK_CNT = 0
+  NEW_BLK = -1
+  D_HEAD_LOC = 0
+  W_BLK_CNT  = 0
+  W_HEAD_BLK = 2
+  W_CUR_BLK  = 3
+  W_PRV_BLK  = 4
+  W_NXT_BLK  = 5
   COM_TIM = 0
   COM_POS = 0
   COM_REP = 0
-  BLK_CNT = 0
-  P_BLK_CNT  = 0
-  P_HEAD_BLK = 6
-  P_NEW_BLK  = 7  
-  P_CUR_BLK  = 8
-  P_PREV_BLK = 9
-  P_NEXT_BLK = 10
-  FILL(ST[0],0,6)
-  FILL(ST[6],NIL,30)
+  SD[0] = 100
+  SD[1] = 101
+  FILL(SW[0],0,2)
+  FILL(SW[2],NIL,8)
   FILL(BITMAP[0],-1,793)
 end sub
 //-------------------------------------------------------------
-sub slot_switch(int type, int slot)
-  P_BLK_CNT  = 0  + 3*type + slot
-  P_HEAD_BLK = 6  + 5*(3*type + slot *type)
-  P_NEW_BLK  = 7  + 5*(3*type + slot +(not slot))
-  P_CUR_BLK  = 8  + 5*(3*type + slot)
-  P_PREV_BLK = 9  + 5*(3*type + slot)
-  P_NEXT_BLK = 10 + 5*(3*type + slot)
+sub switch_type(bool type)
+  D_HEAD_LOC = 0 + type
+  W_BLK_CNT  = 0 + type
+  W_HEAD_BLK = 2 + 4*type
+  W_CUR_BLK  = 3 + 4*type
+  W_PRV_BLK  = 4 + 4*type
+  W_NXT_BLK  = 5 + 4*type
 end sub
 //-------------------------------------------------------------
-sub slot_copy_s(int type, int src, int dst)
+sub load_stp_from_prg_s()
   if(RES_STATE) then
-    int s,d,p
-    s = 0 + 3*type + src
-    d = 0 + 3*type + dst
-    ST[d] = ST[s]
-    for p = 0 to 4
-  	  s = 6 + p + 5*(3*type + src)
-  	  d = 6 + p + 5*(3*type + dst)
-  	  ST[d] = ST[s]
-    next
-  end if
-end sub
-//-------------------------------------------------------------
-sub load_stp_head_from_cur_s()
-  if(RES_STATE) then
-    ST[3] = 0 //P_COUNT    = 0  + 3*type + slot = 0 + 3
-    FILL(ST[21],NIL,5) //P_HEAD_BLK = 6  + 5*(3*type + slot) = 6 + 15
-    GetData(ST[21],"Local HMI",RW,DAT_OFST+BLK_HDR_SZ+BLK_SZ*ST[P_CUR_BLK],1) 
+    SD[1] = DAT_OFST+BLK_HDR_SZ+BLK_SZ*SW[3]
+    SW[1] = 0
+    FILL(SW[6],NIL,4)
+    GetData(SW[6],"Local HMI",RW,SD[1],1) 
   end if  
 end sub
 //-------------------------------------------------------------
@@ -78,14 +68,17 @@ sub get_prg_com_from_cur_s()
 	COM_REP = BUFF[3]
     COM_TIM = COM_TIM -(COM_TIM -1)*(COM_TIM < 1)
 	COM_TIM = COM_TIM -(COM_TIM -(3600*24*365))*(COM_TIM > (3600*24*365))
-	COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0)
-	COM_POS = COM_POS -(COM_POS -ST[P_BLK_CNT])*(COM_POS >= ST[P_BLK_CNT])
+	//todo
+	//todo
+	//todo
+	COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //надо адвансить к run slot cur stp
+	COM_POS = COM_POS -(COM_POS -SW[W_BLK_CNT])*(COM_POS >= SW[W_BLK_CNT])
 	COM_REP = COM_REP -(COM_REP -0)*(COM_REP < 0)
 	COM_REP = COM_REP -(COM_REP -999)*(COM_REP > 999)	
   end if
 end sub
 //-------------------------------------------------------------
-sub load_data_s(int blk, int blk_prv, int req) 
+sub load_data_s(int blk, int req)
   short i,j,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and(req <= 256)
   while(dc < req and RES_STATE)
@@ -98,14 +91,12 @@ sub load_data_s(int blk, int blk_prv, int req)
   	  i = blk / 32 + BO[0]
   	  RES_STATE = RES_STATE and not(BITMAP[i] & (1 << j))
   	  RES_STATE = RES_STATE and(chk ==(prv ^ nxt))
-  	  RES_STATE = RES_STATE and(prv == blk_prv)
   	  i = BLK_SZ - BLK_HDR_SZ
   	  while(dc < req and i > 0)
   	    GetData(BUFF[dc],"Local HMI",RW,DAT_OFST+i+BLK_SZ*blk,1)
   	    i  = i  -1
   	    dc = dc +1
   	  wend
-  	  blk_prv = blk
   	  blk = nxt
 	end if
   wend
@@ -140,11 +131,9 @@ sub load_config_s()
   GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+16,1)
   SetData(COM_REQ_SZ  ,"Local HMI",RW,CFG_OFST+16,1)
   RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
-  GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
-  GetData(ST[P_HEAD_BLK],"Local HMI",RW,CFG_OFST+100,1)
 end sub
 //-------------------------------------------------------------
-sub load_node_s(int blk, int prv_blk)
+sub load_node_s(short blk)
   short prv,nxt,chk
   RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
   if(RES_STATE) then
@@ -152,107 +141,116 @@ sub load_node_s(int blk, int prv_blk)
     GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
     GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*blk,1)
     RES_STATE = RES_STATE and(chk == (prv ^ nxt))
-    RES_STATE = RES_STATE and(prv == prv_blk)
-    RES_STATE = RES_STATE and(nxt > NIL)and(nxt < MAX_BLK_CNT)    
+    RES_STATE = RES_STATE and(nxt > NIL)and(nxt < MAX_BLK_CNT)
   end if
   if(RES_STATE) then
-    ST[P_BLK_CNT ] = ST[P_BLK_CNT ] +1
-    ST[P_CUR_BLK ] = blk
-    ST[P_PREV_BLK] = prv
-    ST[P_NEXT_BLK] = nxt
+    SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
+    SW[W_CUR_BLK] = blk
+    SW[W_PRV_BLK] = prv
+    SW[W_NXT_BLK] = nxt
   end if  
 end sub
 //-------------------------------------------------------------
-sub del_cur_node_s()
-  short chk,before,after
+sub insert_node_next_loop_s(short blk)
+  short before,after,chk
+  if not(RES_STATE) then
+    return
+  end if  
+  if(SW[W_PRV_BLK] > NIL) then
+    GetData(before,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+    chk = before ^ blk
+    SetData(blk   ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
+    SetData(chk   ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+  else
+    SW[W_HEAD_BLK] = blk
+    SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+  end if
+  if(SW[W_CUR_BLK] > NIL) then
+    SetData(blk   ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
+    GetData(after ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
+    chk = after ^ blk
+    SetData(chk   ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+  end if
+  SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
+  SW[W_NXT_BLK] = SW[W_CUR_BLK]
+  SW[W_CUR_BLK] = blk
+  chk = SW[W_PRV_BLK] ^ SW[W_NXT_BLK]
+  SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
+  SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
+  SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+end sub
+//-------------------------------------------------------------
+sub del_node_next_loop_s()
+  short before,after,chk
+  if not(RES_STATE) then
+    return
+  end if
   before = NIL
   after  = NIL
-  RES_STATE = RES_STATE and(ST[P_CUR_BLK] > NIL) //and(blk < MAX_BLK_CNT)
-  if(RES_STATE and ST[P_PREV_BLK] > NIL) then
-	GetData(before        ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*ST[P_PREV_BLK],1)
-	chk = before ^ ST[P_NEXT_BLK]
-    SetData(ST[P_NEXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*ST[P_PREV_BLK],1)
-    SetData(chk           ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*ST[P_PREV_BLK],1)
+  if(SW[W_PRV_BLK] > NIL) then
+	GetData(before       ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+	chk = before ^ SW[W_NXT_BLK]
+    SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
+    SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+  else
+    SW[W_HEAD_BLK] =  SW[W_PRV_BLK]
+    SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)   
   end if
-  if(RES_STATE and ST[P_NEXT_BLK] > NIL) then
-    SetData(ST[P_PREV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*ST[P_NEXT_BLK],1)
-    GetData(after         ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*ST[P_NEXT_BLK],1)
-    chk = after ^ ST[P_PREV_BLK]
-    SetData(chk           ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*ST[P_NEXT_BLK],1)
+  if(SW[W_NXT_BLK] > NIL) then
+    SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_NXT_BLK],1)
+    GetData(after        ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_NXT_BLK],1)
+    chk = after ^ SW[W_PRV_BLK]
+    SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_NXT_BLK],1)
   end if
-  //
-  //P_BLK_CNT  = 0  + 3*type + slot
-  //P_HEAD_BLK = 6  + 5*(3*type + slot *type)
-  //P_NEW_BLK  = 7  + 5*(3*type + slot +(not slot))
-  //P_CUR_BLK  = 8  + 5*(3*type + slot)
-  //P_PREV_BLK = 9  + 5*(3*type + slot)
-  //P_NEXT_BLK = 10 + 5*(3*type + slot)
-  
-  
-  //
-    
-  if(RES_STATE and blk == ST[P_HEAD_BLK]) then
-    ST[P_HEAD_BLK] = nxt_blk
-    //WARN_HEAD_CHANGE = 1 //if nil ???
-  end if
-  if(RES_STATE and blk == ST[P_CUR_BLK]) then
-    if     (nxt_blk > NIL) then
-      ST[P_CUR_BLK] = nxt_blk
-    else if(prv_blk > NIL) then
-      ST[P_CUR_BLK] = prv_blk
-    else
-      ST[P_CUR_BLK] = NIL
-    end if
-    //WARN_CUR_CHANGE = 1 //if nil ???
-  end if
+  SW[W_BLK_CNT] = SW[W_BLK_CNT] -1
+  SW[W_CUR_BLK] = SW[W_NXT_BLK]
+  SW[W_NXT_BLK] = after
 end sub
 //-------------------------------------------------------------
 sub set_block_s(int blk)
   int b,p,s,k
   RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
-  if not(RES_STATE) then
-    return
-  end if
-  b = blk % 32
-  s = blk / 32 + BO[0]
-  RES_STATE = RES_STATE and(BITMAP[s] & (1 << b)) 
-  p = blk
-  for k = 0 to 2
-    b = p % 32
-    p = p / 32
-    s = p + BO[k]
-    BITMAP[s] = BITMAP[s] & ~(1 << b)
-    if(BITMAP[s]) then
-      break
-    end if
-  next
-  BLK_CNT = BLK_CNT +RES_STATE
+  if(RES_STATE) then
+    b = blk % 32
+    s = blk / 32 + BO[0]
+    RES_STATE = RES_STATE and(BITMAP[s] & (1 << b)) 
+    p = blk
+    for k = 0 to 2
+      b = p % 32
+      p = p / 32
+      s = p + BO[k]
+      BITMAP[s] = BITMAP[s] & ~(1 << b)
+      if(BITMAP[s]) then
+        break
+      end if
+    next
+    BLK_CNT = BLK_CNT +RES_STATE
+  end if  
 end sub
 //-------------------------------------------------------------
 sub del_block_s(int blk)
   int b,p,s,k
   RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
-  if not(RES_STATE) then
-    return
-  end if
-  b = blk % 32
-  s = blk / 32 + BO[0]
-  RES_STATE = RES_STATE and not(BITMAP[s] & (1 << b))
-  p = blk
-  for k = 0 to 2
-    b = p % 32
-    p = p / 32
-    s = p + BO[k]
-    BITMAP[s] = BITMAP[s] | (1 << b)
-  next
-  BLK_CNT = BLK_CNT -RES_STATE  
+  if(RES_STATE) then
+    b = blk % 32
+    s = blk / 32 + BO[0]
+    RES_STATE = RES_STATE and not(BITMAP[s] & (1 << b))
+    p = blk
+    for k = 0 to 2
+      b = p % 32
+      p = p / 32
+      s = p + BO[k]
+      BITMAP[s] = BITMAP[s] | (1 << b)
+    next
+    BLK_CNT = BLK_CNT -RES_STATE
+  end if    
 end sub
 //-------------------------------------------------------------
 sub new_block_s()
   int k,s,m,b=0,res=0
   RES_STATE = RES_STATE and(BLK_CNT < MAX_BLK_CNT)
   if not(RES_STATE) then
-    ST[P_NEW_BLK] = NIL
+    NEW_BLK = NIL
     return
   end if 
   for k = 2 down 0 
@@ -273,7 +271,7 @@ sub new_block_s()
     POW(32,k,m)   
     res = res + b*m
   next
-  ST[P_NEW_BLK] = res
+  NEW_BLK = res
 end sub
 //-------------------------------------------------------------
 //-------------------------------------------------------------
@@ -286,8 +284,26 @@ macro_command main()
   load_config_s()
 
   //testing cases
+  int ii,test_count = 0, passed_count = 0
   //######################################################################## 
   if(true) then //testing bitmap loading with value = 3205
+    test_count = test_count +1
+    TRACE("Test case set_block with 3205 failure")
+    BITMAP[100] = ~(1 << 5) // 3205 /32 = 100 (+0)   , 3205 %32 = 5
+    BITMAP[771] = ~(1 << 4) // 100  /32 = 3 (+768)   , 100  %32 = 4
+    BITMAP[792] = ~(1 << 3) // 3    /32 = 0 (+768+24), 3    %32 = 3
+    set_block_s(3205) //try...
+    if(RES_STATE) then
+      TRACE("Failed, values 0x%x 0x%x 0x%x", BITMAP[100], BITMAP[771], BITMAP[792])
+    else
+      passed_count = passed_count +1
+      TRACE("OK")
+    end if
+    init_values()
+  end if  
+  //######################################################################## 
+  if(true) then //testing bitmap loading with value = 3205
+    test_count = test_count +1
     TRACE("Test case set_block with 3205")
     BITMAP[100] = 1 << 5 // 3205 /32 = 100 (+0)   , 3205 %32 = 5
     BITMAP[771] = 1 << 4 // 100  /32 = 3 (+768)   , 100  %32 = 4
@@ -296,12 +312,14 @@ macro_command main()
     if(BITMAP[100] or BITMAP[771] or BITMAP[792] or not RES_STATE) then
       TRACE("Failed, values 0x%x 0x%x 0x%x", BITMAP[100], BITMAP[771], BITMAP[792])
     else
+      passed_count = passed_count +1
       TRACE("OK")
     end if
     init_values()
   end if
   //######################################################################## 
   if(true) then //testing bitmap loading with value = 9369
+    test_count = test_count +1
     TRACE("Test case set_block with 9369")
     BITMAP[292] = 1 << 25 // 9369 /32 = 292 (+0)   , 3205 %32 = 25
     BITMAP[777] = 1 << 4  // 292  /32 = 9 (+768)   , 292  %32 = 4
@@ -310,39 +328,45 @@ macro_command main()
     if(BITMAP[292] or BITMAP[777] or BITMAP[792] or not RES_STATE) then
       TRACE("Failed, values 0x%x 0x%x 0x%x", BITMAP[292], BITMAP[777], BITMAP[792])
     else
+      passed_count = passed_count +1
       TRACE("OK")
     end if
     init_values()
   end if  
   //########################################################################
   if(true) then //testing bitmap get value = 3205
+    test_count = test_count +1
     TRACE("Test case new_block")
     FILL(BITMAP[0],0,793) //simulate full load ecxept of one element
     BITMAP[100] = 1 << 5 // 3205 /32 = 100 (+0)   , 3205 %32 = 5
     BITMAP[771] = 1 << 4 // 100  /32 = 3 (+768)   , 100  %32 = 4
     BITMAP[792] = 1 << 3 // 3    /32 = 0 (+768+24), 3    %32 = 3
     new_block_s() //try...
-    if(ST[P_NEW_BLK] <> 3205 or not RES_STATE) then
-      TRACE("Failed, incorrect value %d", ST[P_NEW_BLK])
+    if(NEW_BLK <> 3205 or not RES_STATE) then
+      TRACE("Failed, incorrect value %d", NEW_BLK)
     else
+      passed_count = passed_count +1
       TRACE("OK")
     end if
     init_values()
   end if
   //######################################################################## 
   if(true) then //testing bitmap delete with value = 3205
+    test_count = test_count +1
     TRACE("Test case del_block with 3205")
     set_block_s(3205)
     del_block_s(3205) //try...
     if(BITMAP[100] <> -1 or BITMAP[771] <> -1 or BITMAP[792] <> -1 or not RES_STATE) then
       TRACE("Failed, values 0x%x 0x%x 0x%x", BITMAP[100], BITMAP[771], BITMAP[792])
     else
+      passed_count = passed_count +1
       TRACE("OK")
     end if
     init_values()
   end if    
   //########################################################################
   if(true) then //testing bitmap perfomance
+    test_count = test_count +1
   	TRACE("Test case bitmap performance")
   	RES_STATE = 1
   	int start,stop
@@ -350,12 +374,11 @@ macro_command main()
   	//1
   	GetData(start,"Local HMI",LW,9030,1)
   	//while(BLK_CNT < MAX_BLK_CNT) //try...
-  	int i = 0
-  	for i = 0 to 999
+  	for ii = 0 to 999
         new_block_s()
-  		set_block_s(ST[P_NEW_BLK])
-  		//del_block_s(ST[P_NEW_BLK])
-  		//set_block_s(ST[P_NEW_BLK])
+  		set_block_s(NEW_BLK)
+  		//del_block_s(NEW_BLK)
+  		//set_block_s(NEW_BLK)
   	next
   	//wend
   	GetData(stop,"Local HMI",LW,9030,1)
@@ -363,45 +386,72 @@ macro_command main()
   	TRACE("time =  %f s", res)
   	res = BLK_CNT/res
   	TRACE("perf =  %f op/s", res)	
-  	TRACE("last block %d", ST[P_NEW_BLK])
+  	TRACE("last block %d", NEW_BLK)
   	TRACE("count %d", BLK_CNT)
     if not(RES_STATE) then
       TRACE("Failed")
     else
+      passed_count = passed_count +1
       TRACE("OK")
     end if  	
   	init_values()
-  end if  
+  end if
   //######################################################################## 
+  if(true) then //testing bitmap delete with value = 3205
+    test_count = test_count +1
+    TRACE("Test case creation")
+    
+    for ii = 0 to 1
+      new_block_s()
+      set_block_s(NEW_BLK)
+      insert_node_next_loop_s(NEW_BLK)
+    next
+    
+    if(SW[W_BLK_CNT] <> 2 or not RES_STATE) then
+      TRACE("Failed")
+    else
+      passed_count = passed_count +1
+      TRACE("OK")
+    end if
+    init_values()
+  end if   
+  //########################################################################
+  if(test_count > 0) then
+    if(passed_count == test_count) then
+      TRACE("ALL TESTS PASSED!")
+    else
+      TRACE("ONLY %d FROM %d TESTS PASSED!",passed_count,test_count)
+    end if
+  end if
+  //########################################################################
 	
   return
-  
-  ST[P_NEXT_BLK] = ST[P_HEAD_BLK]
-  while(ST[P_NEXT_BLK] > NIL and RES_STATE)
-    set_block_s(ST[P_NEXT_BLK])
-    load_node_s(ST[P_NEXT_BLK], ST[P_CUR_BLK])
-	load_stp_head_from_cur_s()
-	slot_switch(TYP_STPS, SLT_LOAD)
-	ST[P_NEXT_BLK] = ST[P_HEAD_BLK]
-	ST[P_BLK_CNT] = 0
-	while(ST[P_NEXT_BLK] > NIL and RES_STATE)
-      set_block_s(ST[P_NEXT_BLK])
-      load_node_s(ST[P_NEXT_BLK], ST[P_CUR_BLK])
-  	  ST[P_BLK_CNT] = ST[P_BLK_CNT] + RES_STATE
-  	  RES_STATE = RES_STATE and(ST[P_BLK_CNT] <= MAX_STP_CNT +PRG_COM_BLK_SZ)
+  GetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+  SW[W_NXT_BLK] = SW[W_HEAD_BLK]
+  SW[W_BLK_CNT] = 0
+  while(SW[W_NXT_BLK] > NIL and RES_STATE)
+    set_block_s(SW[W_NXT_BLK])
+    load_node_s(SW[W_NXT_BLK])
+	load_stp_from_prg_s()
+	switch_type(TYP_STP)
+	SW[W_NXT_BLK] = SW[W_HEAD_BLK]
+	SW[W_BLK_CNT] = 0
+	while(SW[W_NXT_BLK] > NIL and RES_STATE)
+      set_block_s(SW[W_NXT_BLK])
+      load_node_s(SW[W_NXT_BLK])
+  	  RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_STP_CNT +COM_BLK_CNT)
 	wend
-	RES_STATE = RES_STATE and(ST[P_BLK_CNT] > PRG_COM_BLK_SZ)
-	//no need to do that at load
-	//load_data_s(ST[P_HEAD_BLK],NIL,COM_ADD_SZ)
-	//get_prg_com_from_cur_s()
-	slot_switch(TYP_PRG, SLT_LOAD)
-  	ST[P_BLK_CNT] = ST[P_BLK_CNT] + RES_STATE
-  	RES_STATE = RES_STATE and(ST[P_BLK_CNT] <= MAX_PRG_CNT)
+	RES_STATE = RES_STATE and(SW[W_BLK_CNT] > COM_BLK_CNT)
+	switch_type(TYP_PRG)
+  	RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
   wend
   
   if not(RES_STATE) then
     init_values()
   end if
+  SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+  
+  
 //end if
 //-------------------------------------------------------------
 end macro_command
