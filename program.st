@@ -2,7 +2,7 @@
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
-int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 6 ,MAX_DAT_SZ = 262140
+int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5 ,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,TMP_OFST = 100,COM_ADD_SZ = 10,COM_REQ_SZ = 16
 int MAX_PRG_CNT = 500, MAX_STP_CNT = 500
 int BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT
@@ -140,8 +140,9 @@ sub load_node_s(short blk)
     GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
     GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
     GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*blk,1)
+    RES_STATE = RES_STATE and(prv >= NIL)and(prv < MAX_BLK_CNT)
+    RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
     RES_STATE = RES_STATE and(chk == (prv ^ nxt))
-    RES_STATE = RES_STATE and(nxt > NIL)and(nxt < MAX_BLK_CNT)
   end if
   if(RES_STATE) then
     SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
@@ -151,24 +152,64 @@ sub load_node_s(short blk)
   end if  
 end sub
 //-------------------------------------------------------------
-sub insert_node_next_loop_s(short blk)
-  short before,after,chk
+sub advance_s(short shift)
+  short prv,nxt,chk
+  while(RES_STATE and shift)
+    prv = NIL
+    nxt = NIL
+    if(shift > 0) then
+      RES_STATE = RES_STATE and((SW[W_CUR_BLK] > NIL)or(SW[W_NXT_BLK] > NIL))
+      if(SW[W_NXT_BLK] > NIL) then
+        GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_NXT_BLK],1)
+        GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_NXT_BLK],1)
+        GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_NXT_BLK],1)
+        RES_STATE = RES_STATE and(prv == SW[W_CUR_BLK])
+        RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
+        RES_STATE = RES_STATE and(chk == (prv ^ nxt))
+      end if
+      if(RES_STATE) then
+        SW[W_PRV_BLK] = SW[W_CUR_BLK]
+        SW[W_CUR_BLK] = SW[W_NXT_BLK]
+        SW[W_NXT_BLK] = nxt
+      end if
+    else if(shift < 0) then
+      RES_STATE = RES_STATE and((SW[W_CUR_BLK] > NIL)or(SW[W_PRV_BLK] > NIL))
+      if(SW[W_PRV_BLK] > NIL) then
+        GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+        GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
+        GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+        RES_STATE = RES_STATE and(prv >= NIL)and(prv < MAX_BLK_CNT)      
+        RES_STATE = RES_STATE and(nxt == SW[W_CUR_BLK])
+        RES_STATE = RES_STATE and(chk == (prv ^ nxt))
+      end if
+      if(RES_STATE) then
+      	SW[W_NXT_BLK] = SW[W_CUR_BLK]
+        SW[W_CUR_BLK] = SW[W_PRV_BLK]
+        SW[W_PRV_BLK] = prv
+      end if      
+    end if
+    shift = shift -(shift > 0) +(shift < 0)
+  wend
+end sub
+//-------------------------------------------------------------
+sub insert_node_shift_next_s(short blk)
+  short prv,nxt,chk
   if not(RES_STATE) then
     return
   end if  
   if(SW[W_PRV_BLK] > NIL) then
-    GetData(before,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
-    chk = before ^ blk
-    SetData(blk   ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
-    SetData(chk   ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+    GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+    chk = prv ^ blk
+    SetData(blk,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
+    SetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
   else
     SW[W_HEAD_BLK] = blk
     SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
   end if
   if(SW[W_CUR_BLK] > NIL) then
-    SetData(blk   ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
-    GetData(after ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
-    chk = after ^ blk
+    SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
+    GetData(nxt ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
+    chk = nxt ^ blk
     SetData(chk   ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
   end if
   SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
@@ -180,16 +221,17 @@ sub insert_node_next_loop_s(short blk)
   SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
 end sub
 //-------------------------------------------------------------
-sub del_node_next_loop_s()
-  short before,after,chk
+sub del_node_shift_next_s()
+  short prv,nxt,chk
+  RES_STATE = RES_STATE and(SW[W_CUR_BLK] > NIL)
   if not(RES_STATE) then
     return
   end if
-  before = NIL
-  after  = NIL
+  prv = NIL
+  nxt = NIL
   if(SW[W_PRV_BLK] > NIL) then
-	GetData(before       ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
-	chk = before ^ SW[W_NXT_BLK]
+	GetData(prv          ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+	chk = prv ^ SW[W_NXT_BLK]
     SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
     SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
   else
@@ -198,13 +240,13 @@ sub del_node_next_loop_s()
   end if
   if(SW[W_NXT_BLK] > NIL) then
     SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_NXT_BLK],1)
-    GetData(after        ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_NXT_BLK],1)
-    chk = after ^ SW[W_PRV_BLK]
+    GetData(nxt          ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_NXT_BLK],1)
+    chk = nxt ^ SW[W_PRV_BLK]
     SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_NXT_BLK],1)
   end if
   SW[W_BLK_CNT] = SW[W_BLK_CNT] -1
   SW[W_CUR_BLK] = SW[W_NXT_BLK]
-  SW[W_NXT_BLK] = after
+  SW[W_NXT_BLK] = nxt
 end sub
 //-------------------------------------------------------------
 sub set_block_s(int blk)
@@ -365,7 +407,7 @@ macro_command main()
     init_values()
   end if    
   //########################################################################
-  if(true) then //testing bitmap perfomance
+  if(false) then //testing bitmap perfomance
     test_count = test_count +1
   	TRACE("Test case bitmap performance")
   	RES_STATE = 1
@@ -377,6 +419,7 @@ macro_command main()
   	for ii = 0 to 999
         new_block_s()
   		set_block_s(NEW_BLK)
+  		insert_node_shift_next_s(NEW_BLK)
   		//del_block_s(NEW_BLK)
   		//set_block_s(NEW_BLK)
   	next
@@ -397,17 +440,23 @@ macro_command main()
   	init_values()
   end if
   //######################################################################## 
-  if(true) then //testing bitmap delete with value = 3205
+  if(true) then //testing creation
     test_count = test_count +1
     TRACE("Test case creation")
     
-    for ii = 0 to 1
+    for ii = 0 to 2
       new_block_s()
       set_block_s(NEW_BLK)
-      insert_node_next_loop_s(NEW_BLK)
+      insert_node_shift_next_s(NEW_BLK)
+      TRACE("insert  [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
+      advance_s(1)
+      TRACE("advance [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
     next
-    
-    if(SW[W_BLK_CNT] <> 2 or not RES_STATE) then
+    advance_s(0 - ii -1)
+    TRACE("advance [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
+    TRACE("count %d", BLK_CNT)
+     
+    if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
       TRACE("Failed")
     else
       passed_count = passed_count +1
