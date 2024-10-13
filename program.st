@@ -9,6 +9,7 @@ int BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793],SD[2]
 short BUFF[256],SW[10],BLK_CNT,NEW_BLK,NIL = -1
+//подумай на счёт того, чтобы добавить owner и modified флаг
 short D_HEAD_LOC,W_BLK_CNT,W_HEAD_BLK,W_CUR_BLK,W_PRV_BLK,W_NXT_BLK
 //COMMON
 int   COM_TIM
@@ -133,7 +134,7 @@ sub load_config_s()
   RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
 end sub
 //-------------------------------------------------------------
-sub load_node_s(short blk)
+sub load_node_s(short blk) //возможно не нужна
   short prv,nxt,chk
   RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
   if(RES_STATE) then
@@ -157,6 +158,7 @@ sub advance_s(short shift)
   while(RES_STATE and shift)
     prv = NIL
     nxt = NIL
+    RES_STATE = RES_STATE and not((SW[W_PRV_BLK]>NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
     if(shift > 0) then
       RES_STATE = RES_STATE and((SW[W_CUR_BLK] > NIL)or(SW[W_NXT_BLK] > NIL))
       if(SW[W_NXT_BLK] > NIL) then
@@ -192,7 +194,7 @@ sub advance_s(short shift)
   wend
 end sub
 //-------------------------------------------------------------
-sub insert_node_shift_next_s(short blk)
+sub insert_node_s(short blk, short dir)
   short prv,nxt,chk
   if not(RES_STATE) then
     return
@@ -210,7 +212,36 @@ sub insert_node_shift_next_s(short blk)
     SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
     GetData(nxt ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
     chk = nxt ^ blk
-    SetData(chk   ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+    SetData(chk ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+  end if
+  SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
+  SW[W_NXT_BLK] = SW[W_CUR_BLK]
+  SW[W_CUR_BLK] = blk
+  chk = SW[W_PRV_BLK] ^ SW[W_NXT_BLK]
+  SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
+  SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
+  SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+end sub
+//-------------------------------------------------------------
+sub insert_node_shift_next_s(short blk) //это же вставка слева и надо проверить на ошибки
+  short prv,nxt,chk
+  if not(RES_STATE) then
+    return
+  end if  
+  if(SW[W_PRV_BLK] > NIL) then
+    GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+    chk = prv ^ blk
+    SetData(blk,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
+    SetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+  else
+    SW[W_HEAD_BLK] = blk
+    SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+  end if
+  if(SW[W_CUR_BLK] > NIL) then
+    SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
+    GetData(nxt ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
+    chk = nxt ^ blk
+    SetData(chk ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
   end if
   SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
   SW[W_NXT_BLK] = SW[W_CUR_BLK]
