@@ -14,7 +14,7 @@ short BUFF[300],SW[10],NIL = -1
 //возможно стоит вернуть слоты, но только меняя CUR_BLK,PRV_BLK,NXT_BLK (Owner ??)
 //todo
 short D_HEAD_LOC,W_BLK_CNT,W_HEAD_BLK,W_CUR_BLK,W_PRV_BLK,W_NXT_BLK
-short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1, ROLLBACK_OP=0
+short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
@@ -439,11 +439,11 @@ macro_command main()
   
   if(RES_STATE) then
     load_rp_s()
-    if     (ROLLBACK_OP == 'I') then
+    if     (ALLOW_RESTORE == 'I') then
       erase_node_s()
-    else if(ROLLBACK_OP == 'E') then
+    else if(ALLOW_RESTORE == 'E') then
       erase_node_s()
-    else if(ROLLBACK_OP == 'S') then
+    else if(ALLOW_RESTORE == 'S') then
       //store_data_s(BLK_PLD_SZ,RP_DAT_OFST)
     end if
   end if
