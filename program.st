@@ -2,33 +2,35 @@
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
-int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5 ,MAX_DAT_SZ = 262140
+int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,TMP_OFST = 100,COM_ADD_SZ = 10,COM_REQ_SZ = 16
-int MAX_PRG_CNT = 500, MAX_STP_CNT = 500
-int BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT
+int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 300,RP_DAT_OFST=32
+int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793],SD[2]
-short BUFF[256],SW[10],BLK_CNT,RES_BLK,NIL = -1
+short BUFF[300],SW[10],NIL = -1
 //todo
 //подумай на счёт того, чтобы добавить owner и modified флаг
 //возможно стоит вернуть слоты, но только меняя CUR_BLK,PRV_BLK,NXT_BLK (Owner ??)
 //todo
 short D_HEAD_LOC,W_BLK_CNT,W_HEAD_BLK,W_CUR_BLK,W_PRV_BLK,W_NXT_BLK
-short DIR_LEFT = -1,DIR_RIGHT =1
+short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1, ROLLBACK_OP=0
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
-bool  RES_STATE = 1,TYP_PRG=0,TYP_STP=1
+bool  RES_STATE = 0,ALLOW_RESTORE = 0,TYP_PRG=0,TYP_STP=1
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
-  STP_REQ_SZ  = STP_REQ_SZ -(STP_REQ_SZ -128)*(STP_REQ_SZ > 128)
-  BLK_SZ      = BLK_HDR_SZ +STP_ADD_SZ +STP_REQ_SZ
+  BLK_PLD_SZ  = STP_ADD_SZ + STP_REQ_SZ
+  BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ -128)*(BLK_PLD_SZ > 128)
+  STP_REQ_SZ  = BLK_PLD_SZ - STP_ADD_SZ
+  BLK_SZ      = BLK_HDR_SZ +BLK_PLD_SZ
   MAX_BLK_CNT = MAX_DAT_SZ /BLK_SZ
   MAX_BLK_CNT = MAX_BLK_CNT -(MAX_BLK_CNT -24576)*(MAX_BLK_CNT > 24576)
   COM_REQ_SZ   = COM_REQ_SZ -(COM_REQ_SZ -128)*(COM_REQ_SZ > 128)
-  COM_BLK_OFST =(COM_ADD_SZ +(STP_ADD_SZ +STP_REQ_SZ -1))/(STP_ADD_SZ +STP_REQ_SZ)
-  COM_BLK_CNT  =(COM_REQ_SZ +(STP_ADD_SZ +STP_REQ_SZ -1))/(STP_ADD_SZ +STP_REQ_SZ)
+  COM_BLK_OFST =(COM_ADD_SZ +(BLK_PLD_SZ -1))/(BLK_PLD_SZ)
+  COM_BLK_CNT  =(COM_REQ_SZ +(BLK_PLD_SZ -1))/(BLK_PLD_SZ)
   COM_BLK_CNT  = COM_BLK_CNT+COM_BLK_OFST
   BLK_CNT = 0
   RES_BLK = -1
@@ -41,8 +43,8 @@ sub init_values()
   COM_TIM = 0
   COM_POS = 0
   COM_REP = 0
-  SD[0] = 100
-  SD[1] = 101
+  SD[0] = CFG_OFST +32
+  SD[1] = CFG_OFST +33
   FILL(SW[0],0,2)
   FILL(SW[2],NIL,8)
   FILL(BITMAP[0],-1,793)
@@ -68,45 +70,122 @@ end sub
 //-------------------------------------------------------------
 sub get_prg_com_from_cur_s()
   if(RES_STATE) then
-	COM_TIM =(BUFF[0]&0xFFFF)|(BUFF[1]<<16)
-	COM_POS = BUFF[2]
-	COM_REP = BUFF[3]
+	  COM_TIM =(BUFF[0]&0xFFFF)|(BUFF[1]<<16)
+	  COM_POS = BUFF[2]
+	  COM_REP = BUFF[3]
     COM_TIM = COM_TIM -(COM_TIM -1)*(COM_TIM < 1)
-	COM_TIM = COM_TIM -(COM_TIM -(3600*24*365))*(COM_TIM > (3600*24*365))
-	//todo
-	//todo
-	//todo
-	COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //надо адвансить к run slot cur stp
-	COM_POS = COM_POS -(COM_POS -SW[W_BLK_CNT])*(COM_POS >= SW[W_BLK_CNT])
-	COM_REP = COM_REP -(COM_REP -0)*(COM_REP < 0)
-	COM_REP = COM_REP -(COM_REP -999)*(COM_REP > 999)	
+	  COM_TIM = COM_TIM -(COM_TIM -(3600*24*365))*(COM_TIM > (3600*24*365))
+	  //todo
+	  //todo
+	  //todo
+	  COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //надо адвансить к run slot cur stp
+	  COM_POS = COM_POS -(COM_POS -SW[W_BLK_CNT])*(COM_POS >= SW[W_BLK_CNT])
+	  COM_REP = COM_REP -(COM_REP -0)*(COM_REP < 0)
+	  COM_REP = COM_REP -(COM_REP -999)*(COM_REP > 999)	
   end if
 end sub
 //-------------------------------------------------------------
-//todo
-//delete bit check ??
-//todo
-sub load_data_s(int blk, int req)
-  short i,j,prv,nxt,chk,dc = 0
-  RES_STATE = RES_STATE and(req <= 256)
-  while(dc < req and RES_STATE)
+sub create_rp_s(int op, int opt)
+  short dc
+  dc = RP_DAT_OFST
+  RES_STATE = RES_STATE and((op == 'I')or(op == 'E')or(op == 'S'))
+  if not(RES_STATE) then
+    return
+  end if
+  LOWORD(SD[D_HEAD_LOC],BUFF[8])
+  HIWORD(SD[D_HEAD_LOC],BUFF[9])
+  BUFF[10] = SW[W_BLK_CNT ]
+  BUFF[11] = SW[W_HEAD_BLK]
+  BUFF[12] = SW[W_CUR_BLK ]
+  BUFF[13] = SW[W_PRV_BLK ]
+  BUFF[14] = SW[W_NXT_BLK ]
+  BUFF[15] = BLK_CNT
+  BUFF[16] = RES_BLK
+  if     (op == 'I') then
+    BUFF[10] = SW[W_BLK_CNT ] +1 //simulate successful insertion
+    BUFF[12] = opt               //simulate CUR_BLK
+    BUFF[14] = SW[W_CUR_BLK ]    //simulate NXT_BLK
+  else if(op == 'S') then
+    BUFF[24] = BLK_PLD_SZ
+    dc = dc  + BLK_PLD_SZ +BLK_PLD_SZ
+  end if
+  BUFF[0] = dc
+  BUFF[1] = VERSION
+  BUFF[2] = DATA_TYPE
+  BUFF[3] = op
+  CRC(BUFF[0],BUFF[dc],dc)
+  SetData(BUFF[0],"Local HMI",RW,CFG_OFST+64,dc +1)
+end sub
+//-------------------------------------------------------------
+sub load_rp_s()
+  short chk,dc
+  int dw
+  ALLOW_RESTORE = 'N'
+  if(ALLOW_RESTORE) then
+    GetData(BUFF[0],"Local HMI",RW,CFG_OFST+64,MAX_BUF_SZ)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[0] >= RP_DAT_OFST)and(BUFF[0] < MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[1] == VERSION)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[2] == DATA_TYPE)
+  end if
+  if(ALLOW_RESTORE) then
+    dc =BUFF[0]
+    CRC(BUFF[0],chk,dc)
+    dc = dc +1
+    ALLOW_RESTORE = ALLOW_RESTORE and(chk == BUFF[dc])    
+    ALLOW_RESTORE = ALLOW_RESTORE and((BUFF[3] == 'I')or(BUFF[3] == 'E')or(BUFF[3] == 'S'))
+    dw = (BUFF[8]&0xFFFF)|(BUFF[9]<<16)
+    ALLOW_RESTORE = ALLOW_RESTORE and(dw > CFG_OFST)and(dw < (DAT_OFST + MAX_DAT_SZ))
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[10] >= 1  )and(BUFF[10] <= MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[11] >= 0  )and(BUFF[11] <  MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[12] >= NIL)and(BUFF[12] <  MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[13] >= NIL)and(BUFF[13] <  MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[14] >= NIL)and(BUFF[14] <  MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[15] >= 1  )and(BUFF[15] <= MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(BUFF[16] >= NIL)and(BUFF[16] <  MAX_BLK_CNT)
+    ALLOW_RESTORE = ALLOW_RESTORE and(not(BUFF[3] == 'S')or(BUFF[24] == BLK_PLD_SZ))
+    TRACE("Restore Point Was Found, ALLOW = %d", ALLOW_RESTORE)
+  end if
+  if(ALLOW_RESTORE) then
+    ALLOW_RESTORE = BUFF[3]
+    SD[D_HEAD_LOC] = dw
+    SW[W_BLK_CNT ] = BUFF[10]
+    SW[W_HEAD_BLK] = BUFF[11]
+    SW[W_CUR_BLK ] = BUFF[12]
+    SW[W_PRV_BLK ] = BUFF[13]
+    SW[W_NXT_BLK ] = BUFF[14]
+    BLK_CNT = BUFF[15]
+    RES_BLK = BUFF[16]
+  end if
+end sub
+//-------------------------------------------------------------
+sub remove_rp_s()
+  SetData(BITMAP[0],"Local HMI",RW,CFG_OFST+64,16)
+end sub
+//-------------------------------------------------------------
+sub load_data_s(int req, int ofst)
+  short tmp,blk,prv,nxt,chk,dc = 0
+  RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)
+  blk = SW[W_CUR_BLK]
+  prv = SW[W_PRV_BLK]
+  while(RES_STATE and dc < req)
   	RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
     if(RES_STATE) then
-  	  GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
+  	  GetData(tmp,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
   	  GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
   	  GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*blk,1)
-  	  j = blk % 32
-  	  i = blk / 32 + BO[0]
-  	  RES_STATE = RES_STATE and not(BITMAP[i] & (1 << j))
-  	  RES_STATE = RES_STATE and(chk ==(prv ^ nxt))
-  	  i = BLK_SZ - BLK_HDR_SZ
-  	  while(dc < req and i > 0)
-  	    GetData(BUFF[dc],"Local HMI",RW,DAT_OFST+i+BLK_SZ*blk,1)
-  	    i  = i  -1
-  	    dc = dc +1
-  	  wend
-  	  blk = nxt
-	end if
+      RES_STATE = RES_STATE and(tmp == blk)
+      RES_STATE = RES_STATE and(chk ==(tmp ^ nxt))
+      RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
+    end if
+    if(RES_STATE) then
+      tmp = req - dc
+      tmp = tmp -(tmp -BLK_PLD_SZ)*(tmp > BLK_PLD_SZ)      
+      GetData(BUFF[ofst],"Local HMI",RW,DAT_OFST+BLK_HDR_SZ+BLK_SZ*blk,tmp)
+      ofst = ofst +tmp
+      dc   = dc   +tmp
+    end if
+    prv = blk
+    blk = nxt
   wend
 end sub
 //-------------------------------------------------------------
@@ -223,11 +302,12 @@ end sub
 //-------------------------------------------------------------
 sub insert_node_s(short blk) //shift_next
   short prv,nxt,chk
+  RES_STATE = RES_STATE and(blk > NIL)
   RES_STATE = RES_STATE and not((SW[W_PRV_BLK]> NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
   RES_STATE = RES_STATE and not((SW[W_PRV_BLK]<=NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
   if not(RES_STATE) then
     return
-  end if  
+  end if
   if(SW[W_PRV_BLK] > NIL) then
     GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
     chk = prv ^ blk
@@ -261,8 +341,8 @@ sub erase_node_s() //shift_next
   prv = NIL
   nxt = NIL
   if(SW[W_PRV_BLK] > NIL) then
-	GetData(prv          ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
-	chk = prv ^ SW[W_NXT_BLK]
+	  GetData(prv          ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+	  chk = prv ^ SW[W_NXT_BLK]
     SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
     SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
   else
@@ -356,6 +436,18 @@ macro_command main()
 
   init_values()
   load_config_s()
+  
+  if(RES_STATE) then
+    load_rp_s()
+    if     (ROLLBACK_OP == 'I') then
+      erase_node_s()
+    else if(ROLLBACK_OP == 'E') then
+      erase_node_s()
+    else if(ROLLBACK_OP == 'S') then
+      //store_data_s(BLK_PLD_SZ,RP_DAT_OFST)
+    end if
+  end if
+  remove_rp_s()
 
   //testing cases
   int ii,ij,test_count = 0, passed_count = 0
