@@ -497,11 +497,11 @@ macro_command main()
   //######################################################################## 
   if(true) then //Combine test
     test_count = test_count +1
-    TRACE("Combine test")
+    TRACE("Combine prg list")
     TRACE("#1 load test")
     //firstly create list of 5 nodes
     ii = 5
-    while(SW[W_BLK_CNT] < ii)
+    while(RES_STATE and SW[W_BLK_CNT] < ii)
       new_block_s()
       set_block_s(RES_BLK)
       insert_node_s(RES_BLK)
@@ -591,7 +591,161 @@ macro_command main()
       end if      
     end if
     init_values()
-  end if  
+  end if
+  //######################################################################## 
+  if(true) then //Combine test
+    test_count = test_count +1
+    TRACE("Combine prg and stp lists")
+    TRACE("#0 creation")
+    //firstly create list of ii progs witth ij stps
+    ii = 4 //prog count
+    ij = 4 //steps count in prog
+    //begin---------------------------------------------------------------
+    switch_type(TYP_PRG)
+    while(RES_STATE and SW[W_BLK_CNT] < ii)
+      new_block_s()
+      set_block_s(RES_BLK)
+      insert_node_s(RES_BLK)
+      //to stps
+      load_stp_from_prg_s()
+      switch_type(TYP_STP)      
+      SW[W_HEAD_BLK] = NIL
+      SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+      while(RES_STATE and SW[W_BLK_CNT] < (ij +COM_BLK_CNT))
+        new_block_s()
+        set_block_s(RES_BLK)
+        insert_node_s(RES_BLK)      
+      wend
+      //back to prgs
+      switch_type(TYP_PRG)
+    wend
+    //end-----------------------------------------------------------------
+    if(BLK_CNT <> (ii + ii*(COM_BLK_CNT+ij))or not RES_STATE) then
+      TRACE("Failed - #0 creation, breaking...")
+    else
+      TRACE("So far so good!")
+    end if
+    TRACE("COM_BLK_CNT %d",COM_BLK_CNT)
+    TRACE("BLK_CNT %d",BLK_CNT)
+    //than clear data
+    init_values()
+    //1st
+    if(true and RES_STATE) then
+      //and read saved list
+      //begin---------------------------------------------------------------
+      switch_type(TYP_PRG)
+      GetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+      SW[W_NXT_BLK] = SW[W_HEAD_BLK]
+      while(RES_STATE and SW[W_NXT_BLK] > NIL)
+        set_block_s(SW[W_NXT_BLK])
+        load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
+        TRACE("   loaded prg head: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        //to stps
+        load_stp_from_prg_s()
+        switch_type(TYP_STP)
+        SW[W_NXT_BLK] = SW[W_HEAD_BLK] //добавть в функцию load_stp_from_prg_s??
+        while(RES_STATE and SW[W_NXT_BLK] > NIL)
+          set_block_s(SW[W_NXT_BLK])
+          load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
+          TRACE("      loaded stp head: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+          RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_STP_CNT +COM_BLK_CNT)
+        wend
+        RES_STATE = RES_STATE and(SW[W_BLK_CNT] > COM_BLK_CNT)
+        //to prg
+        switch_type(TYP_PRG)
+        RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
+      wend
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      //end-----------------------------------------------------------------
+      TRACE("begin: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      TRACE("count %d",SW[W_BLK_CNT])
+      //check result
+      if(BLK_CNT <> (ii + ii*(COM_BLK_CNT+ij))or not RES_STATE) then
+        TRACE("Failed - #1 load test, breaking...")
+      else
+        passed_count = passed_count +1
+        TRACE("OK - #1 load test")
+      end if
+    end if
+    //1.5nd
+    if(true and RES_STATE) then
+      test_count = test_count +1
+      TRACE("#1.5 test")
+      //begin---------------------------------------------------------------
+      new_block_s()
+      TRACE("RES_BLK = %d",RES_BLK)
+      //end-----------------------------------------------------------------
+      //check result
+      if(RES_BLK <> BLK_CNT or not RES_STATE) then
+        TRACE("Failed - #1.5 test, breaking...")
+      else
+        passed_count = passed_count +1
+        TRACE("OK - #1.5 test")
+      end if      
+    end if
+    //2nd
+    if(false and RES_STATE) then
+      test_count = test_count +1
+      TRACE("#2 insert test")
+      ii = SW[W_BLK_CNT] +1
+      ij = 3 //insert position
+      //begin---------------------------------------------------------------
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
+        advance_s(DIR_RIGHT*ij)
+        TRACE("insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        new_block_s()
+        set_block_s(RES_BLK)
+        insert_node_s(RES_BLK)
+      end if
+      //end-----------------------------------------------------------------
+      TRACE("count %d",SW[W_BLK_CNT])
+      //view
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      while(RES_STATE and SW[W_CUR_BLK] > NIL)
+        TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        advance_s(DIR_RIGHT)
+      wend      
+      //check result
+      if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+        TRACE("Failed - #2 insert test, breaking...")
+      else
+        passed_count = passed_count +1
+        TRACE("OK - #2 insert test")
+      end if      
+    end if
+    //3rd
+    if(false and RES_STATE) then
+      test_count = test_count +1
+      TRACE("#3 deletion test")
+      ii = SW[W_BLK_CNT] -1
+      ij = 3 //deletion position
+      //begin---------------------------------------------------------------
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      if(ij >= 0 and ij < SW[W_BLK_CNT]) then
+        advance_s(DIR_RIGHT*ij)
+        TRACE("deletion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        erase_node_s()
+        del_block_s(RES_BLK)
+      end if
+      //end-----------------------------------------------------------------
+      TRACE("count %d",SW[W_BLK_CNT])
+      //view
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      while(RES_STATE and SW[W_CUR_BLK] > NIL)
+        TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        advance_s(DIR_RIGHT)
+      wend        
+      //check result
+      if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+        TRACE("Failed - #3 deletion test, breaking...")
+      else
+        passed_count = passed_count +1
+        TRACE("OK - #3 deletion test")
+      end if      
+    end if
+    init_values()
+  end if
   //########################################################################
   if(test_count > 0) then
     if(passed_count == test_count) then
