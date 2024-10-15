@@ -191,6 +191,7 @@ end sub
 sub load_store_data_s(int op, int req, int ofst)
   short tmp,blk,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)
+  TRACE("??? (req +ofst) <= MAX_BUF_SZ: req +ofst = [%d], MAX_BUF_SZ = [%d], RES_STATE = [%d]",req +ofst,MAX_BUF_SZ,RES_STATE)
   blk = SW[W_CUR_BLK]
   prv = SW[W_PRV_BLK]
   while(RES_STATE and dc < req)
@@ -199,13 +200,17 @@ sub load_store_data_s(int op, int req, int ofst)
       GetData(tmp,"Local HMI",RW,DAT_OFST+0+BLK_SZ*blk,1)
       GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*blk,1)
       GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*blk,1)
-      RES_STATE = RES_STATE and(tmp == blk)
+      RES_STATE = RES_STATE and(tmp == prv)
       RES_STATE = RES_STATE and(chk ==(tmp ^ nxt))
       RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
     end if
+    TRACE("??? read blk :[%d]:[%d:%d] state = %d",blk,tmp,nxt,RES_STATE)
     if(RES_STATE) then
       tmp = req - dc
+      TRACE("??? data left = [%d]",tmp)
       tmp = tmp -(tmp -BLK_PLD_SZ)*(tmp > BLK_PLD_SZ)
+      TRACE("??? data can be read = [%d]",tmp)
+      TRACE("??? try r/w BUFF[%d] count = [%d]",ofst,tmp)
       if(op == 'L') then
         GetData(BUFF[ofst],"Local HMI",RW,DAT_OFST+BLK_HDR_SZ+BLK_SZ*blk,tmp)
       else
@@ -213,6 +218,7 @@ sub load_store_data_s(int op, int req, int ofst)
       end if
       ofst = ofst +tmp
       dc   = dc   +tmp
+      TRACE("??? ofst = [%d] dc = [%d]",ofst,dc)
     end if
     prv = blk
     blk = nxt
@@ -626,6 +632,43 @@ macro_command main()
     init_values()
   end if
   //######################################################################## 
+  if(true) then //testing node functions
+    test_count = test_count +1
+    TRACE("Testing switching")
+    //begin-----------------------------------------------------------------
+    switch_type(TYP_PRG)
+    SD[D_HEAD_LOC] = 1
+    SW[W_HEAD_BLK] = 2
+    SW[W_BLK_CNT ] = 3
+    switch_type(TYP_STP)
+    SD[D_HEAD_LOC] = 11
+    SW[W_HEAD_BLK] = 12
+    SW[W_BLK_CNT ] = 13
+    switch_type(TYP_PRG)
+    SW[W_CUR_BLK ] = 4
+    SW[W_PRV_BLK ] = 5
+    SW[W_NXT_BLK ] = 6
+    switch_type(TYP_STP)
+    SW[W_CUR_BLK ] = 14
+    SW[W_PRV_BLK ] = 15
+    SW[W_NXT_BLK ] = 16
+    //end-------------------------------------------------------------------
+    switch_type(TYP_PRG)
+    ij = 1
+    ij = ij and SD[D_HEAD_LOC] == 1 and SW[W_HEAD_BLK] == 2 and SW[W_BLK_CNT ] == 3
+    ij = ij and SW[W_CUR_BLK ] == 4 and SW[W_PRV_BLK ] == 5 and SW[W_NXT_BLK ] == 6
+    switch_type(TYP_STP)
+    ij = ij and SD[D_HEAD_LOC] == 11 and SW[W_HEAD_BLK] == 12 and SW[W_BLK_CNT ] == 13
+    ij = ij and SW[W_CUR_BLK ] == 14 and SW[W_PRV_BLK ] == 15 and SW[W_NXT_BLK ] == 16
+    if not(ij) then
+      TRACE("Failed")
+    else
+      passed_count = passed_count +1
+      TRACE("OK")
+    end if
+    init_values()
+  end if
+  //######################################################################## 
   if(true) then //Combine test
     test_count = test_count +1
     TRACE("Combine prg list")
@@ -821,6 +864,7 @@ macro_command main()
       ii = SW[W_BLK_CNT] +2
       ij = 1 //insert position
       //begin---------------------------------------------------------------
+   //@@@@      
       switch_type(TYP_PRG)
       reload_node_s(SW[W_HEAD_BLK],NIL)
       if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
@@ -829,8 +873,9 @@ macro_command main()
         set_block_s(RES_BLK)
         create_rp_s(RP_NEW_PRG,RES_BLK,NIL) //create restore point
         update_retain_s()
+        TRACE("   !!! before    prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         insert_node_s(RES_BLK)
-        TRACE("   insertion prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("   !!! insertion prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         //to stps
         load_stp_from_prg_s()
         switch_type(TYP_STP)
@@ -839,6 +884,7 @@ macro_command main()
         while(RES_STATE and SW[W_BLK_CNT] < (COM_BLK_CNT +1))
           new_block_s()
           set_block_s(RES_BLK)
+          TRACE("      before    stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
           insert_node_s(RES_BLK)
           TRACE("      insertion stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         wend
@@ -847,32 +893,39 @@ macro_command main()
       end if
       //back to prgs
    //@@@@
-      //switch_type(TYP_PRG)
-      //load_stp_from_prg_s()
-      //switch_type(TYP_STP)
-      //reload_node_s(SW[W_HEAD_BLK],NIL)
-      //if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
-        //advance_s(DIR_RIGHT*ij)
-        //new_block_s()
-        //set_block_s(RES_BLK)
-        ////get def values in BUFF[RP_DAT_OFST]
-        //create_rp_s(RP_NEW_BLK|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
-        //update_retain_s()
-        //insert_node_s(RES_BLK)
-        //TRACE("insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-        //remove_rp_s() //delete restore point
-      //end if
-      ////end-----------------------------------------------------------------
-      //switch_type(TYP_PRG)
+      switch_type(TYP_PRG)
+      TRACE("   !!! back to prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
       TRACE("count %d",SW[W_BLK_CNT])
+      //load_stp_from_prg_s() //портит малину обнулением SW[W_BLK_CNT])
+      //т.е при переключении программы шаги надо заново загрузить
+      switch_type(TYP_STP)
+      reload_node_s(SW[W_HEAD_BLK],NIL)
+      TRACE("   @@@ back to stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      TRACE("count %d",SW[W_BLK_CNT])      
+      if(ij >= 0 and (ij + COM_BLK_CNT) <= SW[W_BLK_CNT]) then
+        advance_s(DIR_RIGHT*(ij+COM_BLK_CNT))
+        new_block_s()
+        set_block_s(RES_BLK)
+        //simulate some handfull data
+        FILL(BUFF[RP_DAT_OFST],0,BLK_PLD_SZ)
+        for ii = 0 to BLK_PLD_SZ -1
+          ij = RP_DAT_OFST + ii
+          BUFF[ij] = ij + 10
+        next
+        create_rp_s(RP_NEW_BLK|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
+        update_retain_s()
+        TRACE("   @@@ before at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        insert_node_s(RES_BLK)
+  //advance_s(-5) //test
+        TRACE("   @@@ insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+  //load_store_data_s('S',38,RP_DAT_OFST)
+        load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
+        remove_rp_s() //delete restore point
+      end if
+      //end-----------------------------------------------------------------
+      TRACE("stp count %d",SW[W_BLK_CNT])
+      switch_type(TYP_PRG)
    //@@@@
-      //view
-      //reload_node_s(SW[W_HEAD_BLK],NIL)
-      //while(RES_STATE and SW[W_CUR_BLK] > NIL)
-      //  TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-      //  advance_s(DIR_RIGHT)
-      //wend      
-      //check result
       if(not RES_STATE) then //SW[W_BLK_CNT] <> ii or
         TRACE("Failed - #2 insert test, breaking...")
       else
@@ -891,34 +944,6 @@ macro_command main()
     end if
   end if
   //########################################################################
-	
-  return
-  GetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-  SW[W_NXT_BLK] = SW[W_HEAD_BLK]
-  SW[W_BLK_CNT] = 0
-  while(SW[W_NXT_BLK] > NIL and RES_STATE)
-    set_block_s(SW[W_NXT_BLK])
-    load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
-	load_stp_from_prg_s()
-	switch_type(TYP_STP)
-	SW[W_NXT_BLK] = SW[W_HEAD_BLK]
-	SW[W_BLK_CNT] = 0
-	while(SW[W_NXT_BLK] > NIL and RES_STATE)
-      set_block_s(SW[W_NXT_BLK])
-      load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
-  	  RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_STP_CNT +COM_BLK_CNT)
-	wend
-	RES_STATE = RES_STATE and(SW[W_BLK_CNT] > COM_BLK_CNT)
-	switch_type(TYP_PRG)
-  	RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
-  wend
-  
-  if not(RES_STATE) then
-    init_values()
-  end if
-  SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-  
-  
 //end if
 //-------------------------------------------------------------
 end macro_command
