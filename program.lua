@@ -117,11 +117,12 @@ sub create_rp_s(int op, int opt, int count)
   BUFF[2] = DATA_TYPE
   BUFF[3] = op
   CRC(BUFF[0],BUFF[dc],dc)
+  TRACE("CHK1 = 0x%x",BUFF[dc])
   SetData(BUFF[0],"Local HMI",RW,CFG_OFST+64,dc +1)
 end sub
 //-------------------------------------------------------------
 sub load_rp_s()
-  short chk,dc
+  short chk
   int dw
   RESTORE = RES_STATE
   if(RESTORE) then
@@ -130,11 +131,11 @@ sub load_rp_s()
     RESTORE = RESTORE and(BUFF[1] == VERSION)
     RESTORE = RESTORE and(BUFF[2] == DATA_TYPE)
   end if
+  TRACE("RESTORE 1 = %d",RESTORE)
   if(RESTORE) then
-    dc =BUFF[0]
-    CRC(BUFF[0],chk,dc)
-    dc = dc +1
-    RESTORE = RESTORE and(chk == BUFF[dc])
+    CRC(BUFF[0],chk,BUFF[0])
+    TRACE("CHK2 = 0x%x",chk)
+    RESTORE = RESTORE and(chk == BUFF[BUFF[0]])
     dw = (BUFF[8]&0xFFFF)|(BUFF[9]<<16)
     RESTORE = RESTORE and(dw > CFG_OFST)and(dw < (DAT_OFST + MAX_DAT_SZ))
     RESTORE = RESTORE and(BUFF[10] >= 1  )and(BUFF[10] <= MAX_BLK_CNT)
@@ -152,6 +153,7 @@ sub load_rp_s()
     end if
     TRACE("Restore Point Was Found, ALLOW = %d", RESTORE)
   end if
+  TRACE("RESTORE 2 = %d",RESTORE)
   if(RESTORE) then
     RESTORE = BUFF[3]
     SD[D_HEAD_LOC] = dw
@@ -191,7 +193,6 @@ end sub
 sub load_store_data_s(int op, int req, int ofst)
   short tmp,blk,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)
-  TRACE("??? (req +ofst) <= MAX_BUF_SZ: req +ofst = [%d], MAX_BUF_SZ = [%d], RES_STATE = [%d]",req +ofst,MAX_BUF_SZ,RES_STATE)
   blk = SW[W_CUR_BLK]
   prv = SW[W_PRV_BLK]
   while(RES_STATE and dc < req)
@@ -204,13 +205,9 @@ sub load_store_data_s(int op, int req, int ofst)
       RES_STATE = RES_STATE and(chk ==(tmp ^ nxt))
       RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
     end if
-    TRACE("??? read blk :[%d]:[%d:%d] state = %d",blk,tmp,nxt,RES_STATE)
     if(RES_STATE) then
       tmp = req - dc
-      TRACE("??? data left = [%d]",tmp)
       tmp = tmp -(tmp -BLK_PLD_SZ)*(tmp > BLK_PLD_SZ)
-      TRACE("??? data can be read = [%d]",tmp)
-      TRACE("??? try r/w BUFF[%d] count = [%d]",ofst,tmp)
       if(op == 'L') then
         GetData(BUFF[ofst],"Local HMI",RW,DAT_OFST+BLK_HDR_SZ+BLK_SZ*blk,tmp)
       else
@@ -218,7 +215,6 @@ sub load_store_data_s(int op, int req, int ofst)
       end if
       ofst = ofst +tmp
       dc   = dc   +tmp
-      TRACE("??? ofst = [%d] dc = [%d]",ofst,dc)
     end if
     prv = blk
     blk = nxt
@@ -473,7 +469,7 @@ macro_command main()
   init_values()
   load_config_s()
   
-  load_rp_s()
+  //load_rp_s()
   if     (RESTORE&RP_DEL_BLK) then
     erase_node_s()
   else if(RESTORE&RP_NEW_PRG) then
@@ -488,7 +484,7 @@ macro_command main()
   if     (RESTORE&RP_SAV_DAT) then
     load_store_data_s('S',RES_VAR,RP_DAT_OFST)
   end if
-  remove_rp_s()
+  //remove_rp_s()
   update_retain_s()
 
   //загрузка дерева
@@ -871,7 +867,7 @@ macro_command main()
         advance_s(DIR_RIGHT*ij)
         new_block_s()
         set_block_s(RES_BLK)
-        create_rp_s(RP_NEW_PRG,RES_BLK,NIL) //create restore point
+//        create_rp_s(RP_NEW_PRG,RES_BLK,NIL) //create restore point
         update_retain_s()
         TRACE("   !!! before    prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         insert_node_s(RES_BLK)
@@ -889,7 +885,7 @@ macro_command main()
           TRACE("      insertion stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         wend
         //записать add com
-        remove_rp_s() //delete restore point
+//        remove_rp_s() //delete restore point
       end if
       //back to prgs
    //@@@@
@@ -913,14 +909,17 @@ macro_command main()
           BUFF[ij] = ij + 10
         next
         create_rp_s(RP_NEW_BLK|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
+  load_rp_s()
+  TRACE("RESTORE = %d",RESTORE)
+  create_rp_s(RP_NEW_BLK|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
         update_retain_s()
         TRACE("   @@@ before at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         insert_node_s(RES_BLK)
   //advance_s(-5) //test
         TRACE("   @@@ insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-  //load_store_data_s('S',38,RP_DAT_OFST)
+  //load_store_data_s('S',269,RP_DAT_OFST)
         load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
-        remove_rp_s() //delete restore point
+//        remove_rp_s() //delete restore point
       end if
       //end-----------------------------------------------------------------
       TRACE("stp count %d",SW[W_BLK_CNT])
