@@ -63,7 +63,7 @@ end sub
 sub load_stp_from_prg_s()
   if(RES_STATE) then
     SD[1] = DAT_OFST+BLK_HDR_SZ+BLK_SZ*SW[3]
-    SW[1] = 0
+    SW[1] = 0 //ввести как параметр ???
     FILL(SW[6],NIL,4)
     GetData(SW[6],"Local HMI",RW,SD[1],1) 
   end if  
@@ -109,8 +109,8 @@ sub create_rp_s(int op, int opt, int count)
     BUFF[24] = count
     dc = dc  + count
   else if(op&RP_SWP_BLK) then
-    //todo
     BUFF[25] = opt               //shift
+    dc = dc  + 2*BLK_PLD_SZ
   end if
   BUFF[0] = dc
   BUFF[1] = VERSION
@@ -192,7 +192,7 @@ end sub
 //-------------------------------------------------------------
 sub load_store_data_s(int op, int req, int ofst)
   short tmp,blk,prv,nxt,chk,dc = 0
-  RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)
+  RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)and(req >=0)and(ofst >=0)
   blk = SW[W_CUR_BLK]
   prv = SW[W_PRV_BLK]
   while(RES_STATE and dc < req)
@@ -508,7 +508,7 @@ macro_command main()
     end if
     init_values()
   end if  
-  //######################################################################## 
+  //------------------------------------------------------------------------
   if(true) then //testing bitmap loading with value = 3205
     test_count = test_count +1
     TRACE("Test case set_block with 3205")
@@ -524,7 +524,7 @@ macro_command main()
     end if
     init_values()
   end if
-  //######################################################################## 
+  //------------------------------------------------------------------------
   if(true) then //testing bitmap loading with value = 9369
     test_count = test_count +1
     TRACE("Test case set_block with 9369")
@@ -540,7 +540,7 @@ macro_command main()
     end if
     init_values()
   end if  
-  //########################################################################
+  //------------------------------------------------------------------------
   if(true) then //testing bitmap get value = 3205
     test_count = test_count +1
     TRACE("Test case new_block")
@@ -557,7 +557,7 @@ macro_command main()
     end if
     init_values()
   end if
-  //######################################################################## 
+  //------------------------------------------------------------------------
   if(true) then //testing bitmap delete with value = 3205
     test_count = test_count +1
     TRACE("Test case del_block with 3205")
@@ -571,7 +571,7 @@ macro_command main()
     end if
     init_values()
   end if    
-  //########################################################################
+  //------------------------------------------------------------------------
   if(false) then //testing bitmap perfomance
     test_count = test_count +1
     TRACE("Test case bitmap performance")
@@ -604,7 +604,7 @@ macro_command main()
     end if  	
     init_values()
   end if
-  //######################################################################## 
+  //------------------------------------------------------------------------
   if(true) then //testing node functions
     test_count = test_count +1
     TRACE("Testing node functions")
@@ -628,7 +628,96 @@ macro_command main()
     init_values()
   end if
   //######################################################################## 
-  if(true) then //testing node functions
+  if(true) then //testing load store
+    test_count = test_count +1
+    TRACE("Testing load store")
+    //begin-----------------------------------------------------------------
+    for ii = 0 to 1
+      new_block_s()
+      set_block_s(RES_BLK)
+      insert_node_s(RES_BLK)
+    next
+    FILL(BUFF[RP_DAT_OFST],42,2*BLK_PLD_SZ)
+    load_store_data_s('S',2*BLK_PLD_SZ,RP_DAT_OFST)
+    FILL(BUFF[RP_DAT_OFST],0,2*BLK_PLD_SZ)
+    load_store_data_s('L',2*BLK_PLD_SZ,RP_DAT_OFST)
+    //end-------------------------------------------------------------------
+    for ii = 0 to 2*BLK_PLD_SZ -1
+      ij = RP_DAT_OFST + ii
+      RES_STATE = RES_STATE and(BUFF[ij] == 42)
+    next
+    if(not RES_STATE) then
+      TRACE("Failed")
+    else
+      passed_count = passed_count +1
+      TRACE("OK")
+    end if
+    //one more---------------------------------------------------------------
+    if(RES_STATE and true) then
+      test_count = test_count +1
+      load_store_data_s('L',2*BLK_PLD_SZ +1,RP_DAT_OFST)
+      if(RES_STATE) then
+        TRACE("Failed")
+      else
+        passed_count = passed_count +1
+        TRACE("OK")
+        RES_STATE = 1
+      end if
+    end if
+    //one more---------------------------------------------------------------
+    if(RES_STATE and true) then
+      test_count = test_count +1
+      load_store_data_s('L',MAX_BUF_SZ -99,100)
+      if(RES_STATE) then
+        TRACE("Failed")
+      else
+        passed_count = passed_count +1
+        TRACE("OK")
+        RES_STATE = 1
+      end if      
+    end if
+    //swap test---------------------------------------------------------------
+    if(RES_STATE and true) then
+      TRACE("Testing swap between two blocks")
+      test_count = test_count +1
+      ii = RP_DAT_OFST
+      ij = RP_DAT_OFST + BLK_PLD_SZ
+      FILL(BUFF[0],0,MAX_BUF_SZ)
+      //begin-----------------------------------------------------------------
+      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST)
+        FILL(BUFF[ii],1,BLK_PLD_SZ) //watermark of block A
+      advance_s(DIR_RIGHT)
+      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST+BLK_PLD_SZ)
+        FILL(BUFF[ij],2,BLK_PLD_SZ) //watermark of block B
+      advance_s(DIR_LEFT)
+      create_rp_s(RP_SWP_BLK,DIR_RIGHT,NIL)
+      update_retain_s()
+      load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST+BLK_PLD_SZ)
+      advance_s(DIR_RIGHT)
+      load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
+      advance_s(DIR_LEFT)
+      remove_rp_s()
+      //end-------------------------------------------------------------------
+      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST) //A
+      for ii = RP_DAT_OFST to RP_DAT_OFST+BLK_PLD_SZ -1
+        RES_STATE = RES_STATE and (BUFF[ii] == 2)
+      next
+      advance_s(DIR_RIGHT)
+      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST) //B
+      for ii = RP_DAT_OFST to RP_DAT_OFST+BLK_PLD_SZ -1
+        RES_STATE = RES_STATE and (BUFF[ii] == 1)
+      next
+      if(not RES_STATE) then
+        TRACE("Failed")    
+      else
+        passed_count = passed_count +1
+        TRACE("OK")
+      end if
+    end if
+    init_values()
+  end if
+  //######################################################################## 
+  if(true) then //testing swap slots
     test_count = test_count +1
     TRACE("Testing switching")
     //begin-----------------------------------------------------------------
