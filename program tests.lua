@@ -773,7 +773,8 @@ macro_command main()
           TRACE("after: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         end if
         ij = ij and(RESTORE == RP_NEW_STP)and(RES_STATE)and(BLK_CNT==3)and(SW[W_BLK_CNT]==3)
-        ij = ij and(SW[W_CUR_BLK]==0)and(SW[W_PRV_BLK]==NIL)and(SW[W_NXT_BLK]==NIL)
+        ij = ij and(SW[W_CUR_BLK]==2)and(SW[W_PRV_BLK]==1)and(SW[W_NXT_BLK]==0)
+        //ij = ij and(SW[W_CUR_BLK]==0)and(SW[W_PRV_BLK]==NIL)and(SW[W_NXT_BLK]==NIL)
       next
       remove_rp_s()
       //end-------------------------------------------------------------------
@@ -786,7 +787,6 @@ macro_command main()
     end if
     init_values()
   end if
-return //!!!  
   //######################################################################## 
   if(true) then //testing swap slots
     test_count = test_count +1
