@@ -9,7 +9,7 @@ int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793],SD[2]
 short BUFF[300],SW[10],NIL = -1
-short RP_SAV_DAT = 1,RP_NEW_BLK = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 16,RESTORE = 0
+short RP_SAV_DAT = 1,RP_NEW_STP = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 16,RESTORE = 0
 //todo
 //подумай на счёт того, чтобы добавить owner и modified флаг
 //возможно стоит вернуть слоты, но только меняя CUR_BLK,PRV_BLK,NXT_BLK (Owner ??)
@@ -106,10 +106,9 @@ sub create_rp_s(int op, int opt, int count)
     BUFF[12] = opt               //simulate CUR_BLK
     BUFF[14] = SW[W_CUR_BLK ]    //simulate NXT_BLK
   else if(op&RP_SAV_DAT) then
-    BUFF[24] = count
     dc = dc  + count
   else if(op&RP_SWP_BLK) then
-    BUFF[25] = opt               //shift
+    BUFF[24] = opt               //shift
     dc = dc  + 2*BLK_PLD_SZ
   end if
   BUFF[0] = dc
@@ -117,7 +116,7 @@ sub create_rp_s(int op, int opt, int count)
   BUFF[2] = DATA_TYPE
   BUFF[3] = op
   CRC(BUFF[0],BUFF[dc],dc)
-  TRACE("CHK1 = 0x%x",BUFF[dc])
+TRACE("CHK1 = 0x%x",BUFF[dc])
   SetData(BUFF[0],"Local HMI",RW,CFG_OFST+64,dc +1)
 end sub
 //-------------------------------------------------------------
@@ -131,29 +130,28 @@ sub load_rp_s()
     RESTORE = RESTORE and(BUFF[1] == VERSION)
     RESTORE = RESTORE and(BUFF[2] == DATA_TYPE)
   end if
-  TRACE("RESTORE 1 = %d",RESTORE)
+TRACE("RESTORE 1 = %d",RESTORE)
   if(RESTORE) then
     CRC(BUFF[0],chk,BUFF[0])
-    TRACE("CHK2 = 0x%x",chk)
+TRACE("CHK2 = 0x%x",chk)
     RESTORE = RESTORE and(chk == BUFF[BUFF[0]])
     dw = (BUFF[8]&0xFFFF)|(BUFF[9]<<16)
     RESTORE = RESTORE and(dw > CFG_OFST)and(dw < (DAT_OFST + MAX_DAT_SZ))
-    RESTORE = RESTORE and(BUFF[10] >= 1  )and(BUFF[10] <= MAX_BLK_CNT)
-    RESTORE = RESTORE and(BUFF[11] >= 0  )and(BUFF[11] <  MAX_BLK_CNT)
+    RESTORE = RESTORE and(BUFF[10] >= 0  )and(BUFF[10] <= MAX_BLK_CNT)
+    RESTORE = RESTORE and(BUFF[11] >= NIL)and(BUFF[11] <  MAX_BLK_CNT)
     RESTORE = RESTORE and(BUFF[12] >= NIL)and(BUFF[12] <  MAX_BLK_CNT)
     RESTORE = RESTORE and(BUFF[13] >= NIL)and(BUFF[13] <  MAX_BLK_CNT)
     RESTORE = RESTORE and(BUFF[14] >= NIL)and(BUFF[14] <  MAX_BLK_CNT)
-    RESTORE = RESTORE and(BUFF[15] >= 1  )and(BUFF[15] <= MAX_BLK_CNT)
+    RESTORE = RESTORE and(BUFF[15] >= 0  )and(BUFF[15] <= MAX_BLK_CNT)
     RESTORE = RESTORE and(BUFF[16] >= NIL)and(BUFF[16] <  MAX_BLK_CNT)
-    RESTORE = RESTORE and(not(BUFF[3] == 'S')or(BUFF[24] == BLK_PLD_SZ))
     if     (BUFF[3]&RP_SAV_DAT) then
       RES_VAR = BUFF[0] -RP_DAT_OFST
     else if(BUFF[3]&RP_SWP_BLK) then
-      RES_VAR = BUFF[25]
+      RES_VAR = BUFF[24]
     end if
-    TRACE("Restore Point Was Found, ALLOW = %d", RESTORE)
+TRACE("Restore Point Was Found, ALLOW = %d", RESTORE)
   end if
-  TRACE("RESTORE 2 = %d",RESTORE)
+TRACE("RESTORE 2 = %d",RESTORE)
   if(RESTORE) then
     RESTORE = BUFF[3]
     SD[D_HEAD_LOC] = dw
@@ -474,7 +472,7 @@ macro_command main()
     erase_node_s()
   else if(RESTORE&RP_NEW_PRG) then
     erase_node_s()
-  else if(RESTORE&RP_NEW_BLK) then
+  else if(RESTORE&RP_NEW_STP) then
     insert_node_s(RES_BLK)
   else if(RESTORE&RP_SWP_BLK) then
     load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
@@ -716,6 +714,79 @@ macro_command main()
     end if
     init_values()
   end if
+  //######################################################################## 
+  if(true) then //testing restore point
+    test_count = test_count +1
+    TRACE("Testing restore point before insertion")
+    int T_HEAD_LOC, T_BLK_CNT, T_HEAD_BLK, T_CUR_BLK, T_PRV_BLK, T_NXT_BLK, TBLK_CNT, TRES_BLK
+    //begin-----------------------------------------------------------------
+    for ii = 0 to 1
+      new_block_s()
+      set_block_s(RES_BLK)
+      insert_node_s(RES_BLK)
+    next
+    advance_s(DIR_RIGHT)
+    new_block_s()
+    set_block_s(RES_BLK)
+
+    create_rp_s(RP_NEW_STP,NIL,NIL)
+    update_retain_s()
+    //
+    T_HEAD_LOC = SD[D_HEAD_LOC]
+    T_BLK_CNT  = SW[W_BLK_CNT ]
+    T_HEAD_BLK = SW[W_HEAD_BLK]
+    T_CUR_BLK  = SW[W_CUR_BLK ]
+    T_PRV_BLK  = SW[W_PRV_BLK ]
+    T_NXT_BLK  = SW[W_NXT_BLK ]
+    TBLK_CNT   = BLK_CNT
+    TRES_BLK   = RES_BLK
+    init_values()
+    load_rp_s()
+    //end-------------------------------------------------------------------
+    RES_STATE == RES_STATE and (SD[D_HEAD_LOC] == T_HEAD_LOC)
+    RES_STATE == RES_STATE and (SW[W_BLK_CNT ] == T_BLK_CNT)
+    RES_STATE == RES_STATE and (SW[W_HEAD_BLK] == T_HEAD_BLK)
+    RES_STATE == RES_STATE and (SW[W_CUR_BLK ] == T_CUR_BLK)
+    RES_STATE == RES_STATE and (SW[W_PRV_BLK ] == T_PRV_BLK)
+    RES_STATE == RES_STATE and (SW[W_NXT_BLK ] == T_NXT_BLK)
+    RES_STATE == RES_STATE and (BLK_CNT == TBLK_CNT)
+    RES_STATE == RES_STATE and (RES_BLK == TRES_BLK)
+    RES_STATE = RES_STATE and RESTORE == RP_NEW_STP
+    if not(RES_STATE) then
+      TRACE("Failed")
+    else
+      passed_count = passed_count +1
+      TRACE("OK")
+    end if
+    //1st
+    if(true and RES_STATE) then
+      test_count = test_count +1
+      TRACE("Simulate restart, repeat insertion")
+      ij = 1
+      //try repeat------------------------------------------------------------
+      for ii = 0 to 1
+        init_values()
+        load_rp_s()
+        TRACE("before: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        if(RESTORE&RP_NEW_STP) then
+          insert_node_s(RES_BLK)
+          TRACE("after: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        end if
+        ij = ij and(RESTORE == RP_NEW_STP)and(RES_STATE)and(BLK_CNT==3)and(SW[W_BLK_CNT]==3)
+        ij = ij and(SW[W_CUR_BLK]==0)and(SW[W_PRV_BLK]==NIL)and(SW[W_NXT_BLK]==NIL)
+      next
+      remove_rp_s()
+      //end-------------------------------------------------------------------
+      if not(ij) then
+        TRACE("Failed")
+      else
+        passed_count = passed_count +1
+        TRACE("OK")
+      end if
+    end if
+    init_values()
+  end if
+return //!!!  
   //######################################################################## 
   if(true) then //testing swap slots
     test_count = test_count +1
@@ -997,10 +1068,10 @@ macro_command main()
           ij = RP_DAT_OFST + ii
           BUFF[ij] = ij + 10
         next
-        create_rp_s(RP_NEW_BLK|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
+        create_rp_s(RP_NEW_STP|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
   load_rp_s()
   TRACE("RESTORE = %d",RESTORE)
-  create_rp_s(RP_NEW_BLK|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
+  create_rp_s(RP_NEW_STP|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
         update_retain_s()
         TRACE("   @@@ before at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
         insert_node_s(RES_BLK)
