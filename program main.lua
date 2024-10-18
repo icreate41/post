@@ -19,7 +19,7 @@ short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
-bool  RES_STATE = 0,TYP_PRG=0,TYP_STP=1
+bool  RES_STATE,TYP_PRG=0,TYP_STP=1
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
@@ -285,7 +285,7 @@ sub load_node_s(short blk, short prev_blk)
   end if  
 end sub
 //-------------------------------------------------------------
-sub advance_s(short shift)
+sub advance_s(int shift)
   short prv,nxt,chk
   while(RES_STATE and shift)
     prv = NIL
@@ -458,11 +458,12 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-int view_pos[2],run_pos[2],cmd = 0, opt = 0
+int i,j,p,view_pos[2],run_pos[2]
+short cmd = 0,opt = 0
 short def_stp_src = 100,def_com_src = 200
-bool boolean,update_pos = 0
+bool update_pos = 0
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//if(INIT() == true) then
+if(INIT() == true) then
   //try to restore
   init_values()
   load_config_s()
@@ -539,21 +540,24 @@ bool boolean,update_pos = 0
   end if
   FILL(view_pos[0],0,2)
   FILL(run_pos [0],NIL,2)
-//end if
+end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(not RES_STATE) then
   TRACE("FAILURE")
   return
 end if
 GetData(cmd,"Local HMI",LW,0,1)
-GetData(opt,"Local HMI",LW,1,1)
+GetData(opt,"Local HMI",LW,2,1)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-if((cmd == 0)and(cmd == 1)) then
-  boolean = cmd
-  switch_type(boolean)
-  reload_node_s(SW[W_HEAD_BLK],NIL)
-  advance_s(view_pos[boolean]) //нужны проверки
-  advance_s(opt)
+if((cmd == 0)and(cmd == 1)) then //учти оффсет шагов
+  p = cmd -0
+  if(view_pos[p] >= 0) then
+    switch_type(p or 0)
+    reload_node_s(SW[W_HEAD_BLK],NIL)
+    i = LIM(view_pos[p] + opt,0,SW[W_BLK_CNT] -1)
+    advance_s(i)
+  end if
+  TRACE("at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
 end if  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 cmd = NIL
