@@ -549,18 +549,18 @@ end if
 GetData(cmd,"Local HMI",LW,0,1)
 GetData(opt,"Local HMI",LW,2,1)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-if((cmd == 0)and(cmd == 1)) then //учти оффсет шагов
-  p = cmd -0
+if((cmd == 1)or(cmd == 2)) then //и ещё учесть офсеты шагов
+  p = cmd -1
   if(view_pos[p] >= 0) then
     switch_type(p or 0)
     reload_node_s(SW[W_HEAD_BLK],NIL)
-    i = LIM(view_pos[p] + opt,0,SW[W_BLK_CNT] -1)
-    advance_s(i)
+    view_pos[p] = LIM(view_pos[p] + opt,0,SW[W_BLK_CNT] -1)
+    advance_s(view_pos[p])
   end if
   TRACE("at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
 end if  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-cmd = NIL
+cmd = 0
 SetData(cmd,"Local HMI",LW,0,1)
 //-------------------------------------------------------------
 end macro_command
