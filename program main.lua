@@ -1,4 +1,9 @@
 //-------------------------------------------------------------
+//итог - чинить сохранение и чтение количества шагов
+//нужна кс для ...
+//switch type это пиздец
+//загрузка текущей программы
+//замени type на проверку base[p] == p
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
@@ -24,6 +29,7 @@ bool  RES_STATE,TYP_PRG=0,TYP_STP=1
 sub init_values()
   RES_STATE = 1
   BLK_PLD_SZ  = STP_ADD_SZ + STP_REQ_SZ
+  BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ   -3)*(BLK_PLD_SZ <   3)
   BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ -128)*(BLK_PLD_SZ > 128)
   STP_REQ_SZ  = BLK_PLD_SZ - STP_ADD_SZ
   BLK_SZ      = BLK_HDR_SZ +BLK_PLD_SZ
@@ -79,7 +85,7 @@ sub get_prg_com_from_cur_s()
     //todo
     //todo
     //todo
-    COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //надо адвансить к run slot cur stp
+    COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //вот херня
     COM_POS = COM_POS -(COM_POS -SW[W_BLK_CNT])*(COM_POS >= SW[W_BLK_CNT])
     COM_REP = COM_REP -(COM_REP -0)*(COM_REP < 0)
     COM_REP = COM_REP -(COM_REP -999)*(COM_REP > 999)
@@ -458,15 +464,31 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-int i,j,p,view_pos[2],run_pos[2]
-short cmd = 0,opt = 0
+short position[6],base[6],type[6]
+short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
+int p,k, cmd = 0,opt = 0
 short def_stp_src = 100,def_com_src = 200
-bool update_pos = 0
+bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
-  //try to restore
+  FILL(position[0],0,6)
+  base[ps_stp] = ps_prg
+  type[ps_stp] = TYP_STP
+  base[pw_stp] = ps_prg
+  type[pw_stp] = TYP_STP
+  base[pr_stp] = pr_prg
+  type[pr_stp] = TYP_STP
+  base[ps_prg] = ps_prg
+  type[ps_prg] = TYP_PRG
+  base[pw_prg] = pw_prg
+  type[pw_prg] = TYP_PRG
+  base[pr_prg] = pr_prg
+  type[pr_prg] = TYP_PRG
+  run = 0
+  //
   init_values()
   load_config_s()
+  //try to restore
   load_rp_s()
   if     (RESTORE&RP_DEL_BLK) then
     erase_node_s()
@@ -538,8 +560,6 @@ if(INIT() == true) then
     wend
     TRACE("created: [%d], prgs [%d]",BLK_CNT,SW[W_BLK_CNT])
   end if
-  FILL(view_pos[0],0,2)
-  FILL(run_pos [0],NIL,2)
 end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(not RES_STATE) then
@@ -548,19 +568,33 @@ if(not RES_STATE) then
 end if
 GetData(cmd,"Local HMI",LW,0,1)
 GetData(opt,"Local HMI",LW,2,1)
+p = 0
+SetData(p,"Local HMI",LW,0,1)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-if((cmd == 1)or(cmd == 2)) then //и ещё учесть офсеты шагов
-  p = cmd -1
-  if(view_pos[p] >= 0) then
-    switch_type(p or 0)
+p = var_range(cmd+0,10,5)
+if(p >= 0) then
+  TRACE("p: [%d], opt :[%d]",p,opt)
+  switch_type(TYP_PRG) //to prg
+  reload_node_s(SW[W_HEAD_BLK],NIL)
+  TRACE("head: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+  base[p] = base[p] + opt*(type[p] == TYP_PRG)
+  base[p] = LIM(base[p],0,SW[W_BLK_CNT] -1)
+  advance_s(base[p])
+  TRACE("prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+  if(type[p] == TYP_STP) then
+    load_stp_from_prg_s() //to stps
+    switch_type(TYP_STP)
     reload_node_s(SW[W_HEAD_BLK],NIL)
-    view_pos[p] = LIM(view_pos[p] + opt,0,SW[W_BLK_CNT] -1)
-    advance_s(view_pos[p])
-  end if
-  TRACE("at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+    TRACE("stp head: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+    TRACE("SW[W_BLK_CNT]: [%d]",SW[W_BLK_CNT])
+    TRACE("want: [%d]",position[p]+opt)
+    TRACE("lim: [%d]",SW[W_BLK_CNT] -COM_BLK_CNT -1)
+    position[p] = LIM(position[p]+opt,0,SW[W_BLK_CNT] -COM_BLK_CNT -1)
+    TRACE("get: [%d]",position[p]+opt)
+    advance_s(COM_BLK_CNT+position[p])
+    TRACE("stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+  end if  
 end if  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-cmd = 0
-SetData(cmd,"Local HMI",LW,0,1)
 //-------------------------------------------------------------
 end macro_command

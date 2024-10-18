@@ -19,7 +19,7 @@ short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
-bool  RES_STATE = 0,TYP_PRG=0,TYP_STP=1
+bool  RES_STATE,TYP_PRG=0,TYP_STP=1
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
