@@ -458,9 +458,9 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-int CMD
-short wnd_prg_pos,wnd_stp_pos,run_prg_pos,run_stp_pos
+int view_pos[2],run_pos[2],cmd = 0, opt = 0
 short def_stp_src = 100,def_com_src = 200
+bool boolean,update_pos = 0
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //if(INIT() == true) then
   //try to restore
@@ -523,7 +523,7 @@ short def_stp_src = 100,def_com_src = 200
       while(RES_STATE and SW[W_BLK_CNT] < (COM_BLK_CNT +1))
         new_block_s()
         set_block_s(RES_BLK)
-        insert_node_s(RES_BLK) //голову автоматом обновит тут
+        insert_node_s(RES_BLK)
         GetData(BUFF[0],"Local HMI",LW,def_stp_src,BLK_PLD_SZ)        
         load_store_data_s('S',0,BLK_PLD_SZ)
       wend
@@ -537,11 +537,26 @@ short def_stp_src = 100,def_com_src = 200
     wend
     TRACE("created: [%d], prgs [%d]",BLK_CNT,SW[W_BLK_CNT])
   end if
+  FILL(view_pos[0],0,2)
+  FILL(run_pos [0],NIL,2)
 //end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(not RES_STATE) then
   TRACE("FAILURE")
   return
 end if
+GetData(cmd,"Local HMI",LW,0,1)
+GetData(opt,"Local HMI",LW,1,1)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+if((cmd == 0)and(cmd == 1)) then
+  boolean = cmd
+  switch_type(boolean)
+  reload_node_s(SW[W_HEAD_BLK],NIL)
+  advance_s(view_pos[boolean]) //нужны проверки
+  advance_s(opt)
+end if  
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+cmd = NIL
+SetData(cmd,"Local HMI",LW,0,1)
 //-------------------------------------------------------------
 end macro_command
