@@ -184,7 +184,7 @@ sub update_retain_s()
   end if
 end sub
 //-------------------------------------------------------------
-sub load_store_data_s(int op, int req, int ofst)
+sub load_store_data_s(int op, int ofst, int req)
   short tmp,blk,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)and(req >=0)and(ofst >=0)
   blk = SW[W_CUR_BLK]
@@ -460,8 +460,9 @@ macro_command main()
 //-------------------------------------------------------------
 int CMD
 short wnd_prg_pos,wnd_stp_pos,run_prg_pos,run_stp_pos
+short def_stp_src = 100,def_com_src = 200
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-if(INIT() == true) then
+//if(INIT() == true) then
   //try to restore
   init_values()
   load_config_s()
@@ -473,12 +474,12 @@ if(INIT() == true) then
   else if(RESTORE&RP_NEW_STP) then
     insert_node_s(RES_BLK)
   else if(RESTORE&RP_SWP_BLK) then
-    load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST+BLK_PLD_SZ)
+    load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
     advance_s(RES_VAR)
-    load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
+    load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
   end if
   if     (RESTORE&RP_SAV_DAT) then
-    load_store_data_s('S',RES_VAR,RP_DAT_OFST)
+    load_store_data_s('S',RP_DAT_OFST,RES_VAR)
   end if
   remove_rp_s()
   //load structure - - - - - - - - - - - - - - - - - - - - - - - 
@@ -504,21 +505,18 @@ if(INIT() == true) then
     wend
     RES_STATE = RES_STATE and(SW[W_BLK_CNT] > 0)
   else
-    //config changed msg  
+    TRACE("CONFIG: created")
   end if
   if(RES_STATE) then
-    TRACE("loaded blk: [%d], prgs: [%d]",BLK_CNT,SW[W_BLK_CNT])
+    TRACE("loaded: blk [%d], prgs [%d]",BLK_CNT,SW[W_BLK_CNT])
   //create structure on failure - - - - - - - - - - - - - - - - - -
   else  
     init_values()
-    FILL(BUFF[0],0,BLK_PLD_SZ)
-    //getdata defs
     switch_type(TYP_PRG)
     while(RES_STATE and SW[W_BLK_CNT] < 1)
       new_block_s()
       set_block_s(RES_BLK)
       insert_node_s(RES_BLK)
-      //load_store_data_s('S',BLK_PLD_SZ,0) //опасно затираем head stps
       load_stp_from_prg_s() //to stps
       switch_type(TYP_STP)
       SW[W_HEAD_BLK] = NIL
@@ -526,16 +524,20 @@ if(INIT() == true) then
         new_block_s()
         set_block_s(RES_BLK)
         insert_node_s(RES_BLK) //голову автоматом обновит тут
-        load_store_data_s('S',BLK_PLD_SZ,0)
+        GetData(BUFF[0],"Local HMI",LW,def_stp_src,BLK_PLD_SZ)        
+        load_store_data_s('S',0,BLK_PLD_SZ)
       wend
       reload_node_s(SW[W_HEAD_BLK],NIL)
+      FILL(BUFF[0],0,COM_ADD_SZ)
+      load_store_data_s('S',0,COM_ADD_SZ)
       advance_s(COM_BLK_OFST)
-      load_store_data_s('S',COM_REQ_SZ,BLK_PLD_SZ) //местами поменяй
+      GetData(BUFF[0],"Local HMI",LW,def_com_src,COM_REQ_SZ)      
+      load_store_data_s('S',0,COM_REQ_SZ)
       switch_type(TYP_PRG) //back to prgs
     wend
-    TRACE("created blk: [%d], prgs: [%d]",BLK_CNT,SW[W_BLK_CNT])
+    TRACE("created: [%d], prgs [%d]",BLK_CNT,SW[W_BLK_CNT])
   end if
-end if
+//end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(not RES_STATE) then
   TRACE("FAILURE")

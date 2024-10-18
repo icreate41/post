@@ -188,7 +188,7 @@ sub update_retain_s()
   end if
 end sub
 //-------------------------------------------------------------
-sub load_store_data_s(int op, int req, int ofst)
+sub load_store_data_s(int op, int ofst, int req)
   short tmp,blk,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)and(req >=0)and(ofst >=0)
   blk = SW[W_CUR_BLK]
@@ -475,12 +475,12 @@ macro_command main()
   else if(RESTORE&RP_NEW_STP) then
     insert_node_s(RES_BLK)
   else if(RESTORE&RP_SWP_BLK) then
-    load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
+    load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
     advance_s(RES_VAR)
-    load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST+BLK_PLD_SZ)
+    load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
   end if
   if     (RESTORE&RP_SAV_DAT) then
-    load_store_data_s('S',RES_VAR,RP_DAT_OFST)
+    load_store_data_s('S',RP_DAT_OFST,RES_VAR)
   end if
   //remove_rp_s()
   update_retain_s()
@@ -636,9 +636,9 @@ macro_command main()
       insert_node_s(RES_BLK)
     next
     FILL(BUFF[RP_DAT_OFST],42,2*BLK_PLD_SZ)
-    load_store_data_s('S',2*BLK_PLD_SZ,RP_DAT_OFST)
+    load_store_data_s('S',RP_DAT_OFST,2*BLK_PLD_SZ)
     FILL(BUFF[RP_DAT_OFST],0,2*BLK_PLD_SZ)
-    load_store_data_s('L',2*BLK_PLD_SZ,RP_DAT_OFST)
+    load_store_data_s('L',RP_DAT_OFST,2*BLK_PLD_SZ)
     //end-------------------------------------------------------------------
     for ii = 0 to 2*BLK_PLD_SZ -1
       ij = RP_DAT_OFST + ii
@@ -653,7 +653,7 @@ macro_command main()
     //one more---------------------------------------------------------------
     if(RES_STATE and true) then
       test_count = test_count +1
-      load_store_data_s('L',2*BLK_PLD_SZ +1,RP_DAT_OFST)
+      load_store_data_s('L',RP_DAT_OFST,2*BLK_PLD_SZ +1)
       if(RES_STATE) then
         TRACE("Failed")
       else
@@ -665,7 +665,7 @@ macro_command main()
     //one more---------------------------------------------------------------
     if(RES_STATE and true) then
       test_count = test_count +1
-      load_store_data_s('L',MAX_BUF_SZ -99,100)
+      load_store_data_s('L',100,MAX_BUF_SZ -99)
       if(RES_STATE) then
         TRACE("Failed")
       else
@@ -682,26 +682,26 @@ macro_command main()
       ij = RP_DAT_OFST + BLK_PLD_SZ
       FILL(BUFF[0],0,MAX_BUF_SZ)
       //begin-----------------------------------------------------------------
-      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST)
+      load_store_data_s('L',RP_DAT_OFST,BLK_PLD_SZ)
         FILL(BUFF[ii],1,BLK_PLD_SZ) //watermark of block A
       advance_s(DIR_RIGHT)
-      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST+BLK_PLD_SZ)
+      load_store_data_s('L',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
         FILL(BUFF[ij],2,BLK_PLD_SZ) //watermark of block B
       advance_s(DIR_LEFT)
       create_rp_s(RP_SWP_BLK,DIR_RIGHT,NIL)
       update_retain_s()
-      load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST+BLK_PLD_SZ)
+      load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
       advance_s(DIR_RIGHT)
-      load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
+      load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
       advance_s(DIR_LEFT)
       remove_rp_s()
       //end-------------------------------------------------------------------
-      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST) //A
+      load_store_data_s('L',RP_DAT_OFST,BLK_PLD_SZ) //A
       for ii = RP_DAT_OFST to RP_DAT_OFST+BLK_PLD_SZ -1
         RES_STATE = RES_STATE and (BUFF[ii] == 2)
       next
       advance_s(DIR_RIGHT)
-      load_store_data_s('L',BLK_PLD_SZ,RP_DAT_OFST) //B
+      load_store_data_s('L',RP_DAT_OFST,BLK_PLD_SZ) //B
       for ii = RP_DAT_OFST to RP_DAT_OFST+BLK_PLD_SZ -1
         RES_STATE = RES_STATE and (BUFF[ii] == 1)
       next
@@ -1077,8 +1077,8 @@ macro_command main()
         insert_node_s(RES_BLK)
   //advance_s(-5) //test
         TRACE("   @@@ insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-  //load_store_data_s('S',269,RP_DAT_OFST)
-        load_store_data_s('S',BLK_PLD_SZ,RP_DAT_OFST)
+  //load_store_data_s('S',RP_DAT_OFST,269)
+        load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
 //        remove_rp_s() //delete restore point
       end if
       //end-----------------------------------------------------------------
