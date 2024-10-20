@@ -1,7 +1,5 @@
 //-------------------------------------------------------------
-//итог - чинить сохранение и чтение количества шагов
 //нужна кс для ...
-//switch type это пиздец
 //загрузка последней программы как текущей
 //load_node_s - проверка кол ва шагов
 //замени type на проверку base[p] == p
@@ -11,7 +9,7 @@ int HEADER = 0x66FFC0DE,VERSION = 0x1
 int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,COM_ADD_SZ = 10,COM_REQ_SZ = 16
 int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 300,RP_DAT_OFST=32
-int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR
+int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR,PRG_SEL_LOC
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
 short BUFF[300],NIL = -1
@@ -32,7 +30,6 @@ bool  RES_STATE
 sub init_values()
   RES_STATE = 1
   BLK_PLD_SZ  = STP_ADD_SZ + STP_REQ_SZ
-  //BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ   -3)*(BLK_PLD_SZ <   3)
   BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ -128)*(BLK_PLD_SZ > 128)
   STP_REQ_SZ  = BLK_PLD_SZ - STP_ADD_SZ
   BLK_SZ      = BLK_HDR_SZ +BLK_PLD_SZ
@@ -49,6 +46,7 @@ sub init_values()
   COM_REP = 0
   M_HEAD_LOC[PRG] = CFG_OFST +32 //тут два шорта, 1 - голова, 2 - количество блоков
   M_HEAD_LOC[STP] = CFG_OFST +34 //тут
+  PRG_SEL_LOC     = CFG_OFST +36
   FILL(M_BLK_CNT [0],0,2) //стоит удалить и оставить только NIL, подгрузку сделать как load_head
   FILL(M_HEAD_BLK[0],NIL,2)
   FILL(M_CUR_BLK [0],NIL,2)
@@ -66,6 +64,37 @@ sub load_stp_from_prg_s() //load_head_s()
     M_NXT_BLK [STP] = NIL
     GetData(M_HEAD_BLK[STP],"Local HMI",RW,M_HEAD_LOC[STP]+LOC_OFST_HEAD,1) 
   end if  
+end sub
+//-------------------------------------------------------------
+sub load_config_s()
+  int tmp_int
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +0,1)
+  SetData(HEADER      ,"Local HMI",RW,CFG_OFST +0,1)
+  RES_STATE = RES_STATE and(HEADER       == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +2,1)
+  SetData(VERSION     ,"Local HMI",RW,CFG_OFST +2,1)
+  RES_STATE = RES_STATE and(VERSION      == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +4,1)
+  SetData(DATA_TYPE   ,"Local HMI",RW,CFG_OFST +4,1)
+  RES_STATE = RES_STATE and(DATA_TYPE    == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +6,1)
+  SetData(STP_REQ_SZ  ,"Local HMI",RW,CFG_OFST +6,1)
+  RES_STATE = RES_STATE and(STP_REQ_SZ   == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +8,1)
+  SetData(MAX_DAT_SZ  ,"Local HMI",RW,CFG_OFST +8,1)
+  RES_STATE = RES_STATE and(MAX_DAT_SZ   >= tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+10,1)
+  SetData(DAT_OFST    ,"Local HMI",RW,CFG_OFST+10,1)
+  RES_STATE = RES_STATE and(DAT_OFST     == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+12,1)
+  SetData(MAX_PRG_CNT ,"Local HMI",RW,CFG_OFST+12,1)
+  RES_STATE = RES_STATE and(MAX_PRG_CNT  >= tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+14,1)
+  SetData(MAX_STP_CNT ,"Local HMI",RW,CFG_OFST+14,1)
+  RES_STATE = RES_STATE and(MAX_STP_CNT  >= tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+16,1)
+  SetData(COM_REQ_SZ  ,"Local HMI",RW,CFG_OFST+16,1)
+  RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
 end sub
 //-------------------------------------------------------------
 //sub get_prg_com_from_cur_s()
@@ -212,37 +241,6 @@ sub load_store_data_s(int op, int ofst, int req)
     prv = blk
     blk = nxt
   wend
-end sub
-//-------------------------------------------------------------
-sub load_config_s()
-  int tmp_int
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +0,1)
-  SetData(HEADER      ,"Local HMI",RW,CFG_OFST +0,1)
-  RES_STATE = RES_STATE and(HEADER       == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +2,1)
-  SetData(VERSION     ,"Local HMI",RW,CFG_OFST +2,1)
-  RES_STATE = RES_STATE and(VERSION      == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +4,1)
-  SetData(DATA_TYPE   ,"Local HMI",RW,CFG_OFST +4,1)
-  RES_STATE = RES_STATE and(DATA_TYPE    == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +6,1)
-  SetData(STP_REQ_SZ  ,"Local HMI",RW,CFG_OFST +6,1)
-  RES_STATE = RES_STATE and(STP_REQ_SZ   == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +8,1)
-  SetData(MAX_DAT_SZ  ,"Local HMI",RW,CFG_OFST +8,1)
-  RES_STATE = RES_STATE and(MAX_DAT_SZ   >= tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+10,1)
-  SetData(DAT_OFST    ,"Local HMI",RW,CFG_OFST+10,1)
-  RES_STATE = RES_STATE and(DAT_OFST     == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+12,1)
-  SetData(MAX_PRG_CNT ,"Local HMI",RW,CFG_OFST+12,1)
-  RES_STATE = RES_STATE and(MAX_PRG_CNT  >= tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+14,1)
-  SetData(MAX_STP_CNT ,"Local HMI",RW,CFG_OFST+14,1)
-  RES_STATE = RES_STATE and(MAX_STP_CNT  >= tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+16,1)
-  SetData(COM_REQ_SZ  ,"Local HMI",RW,CFG_OFST+16,1)
-  RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
 end sub
 //-------------------------------------------------------------
 sub reload_node_s(short blk, short prev_blk)
@@ -461,7 +459,13 @@ macro_command main()
 //-------------------------------------------------------------
 short position[6],base[6],type[6]
 short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
-int p,k, cmd = 0,opt = 0
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//testing stack
+int st_cmd[10],st_opt[10],st_pos = 1, st_cnt = 1,pre_cmd_done = 0
+int cmd_advance = 10, cmd_view = 1000
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+int p,k,cmd = 0,opt = 0
+int tr_update,tr_st_before
 short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -524,6 +528,7 @@ if(INIT() == true) then
     wend
     SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
     RES_STATE = RES_STATE and(M_BLK_CNT[SEL] > 0)
+    GetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
   else
     TRACE("CONFIG: created")
   end if
@@ -555,6 +560,7 @@ if(INIT() == true) then
       load_store_data_s('S',0,COM_REQ_SZ)
       SEL = PRG
     wend
+    SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
     TRACE("created: [%d], prgs [%d]",BLK_CNT,M_BLK_CNT[SEL])
   end if
 end if
@@ -567,36 +573,98 @@ GetData(cmd,"Local HMI",LW,0,1)
 GetData(opt,"Local HMI",LW,2,1)
 p = 0
 SetData(p,"Local HMI",LW,0,1)
+if(cmd) then
+  st_cmd[st_cnt] = cmd
+  st_opt[st_cnt] = opt
+  st_cnt = st_cnt +1
+end if
+st_cmd[st_cnt] = cmd_view + PRG
+st_cnt = st_cnt +1
+st_cmd[st_cnt] = cmd_view + STP
+st_cnt = st_cnt +1
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-p = var_range(cmd+0,10,5)
-if(p >= 0) then
-  TRACE("p: [%d], opt :[%d]",p,opt)
-  SEL = PRG //to prg
-  GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
-  reload_node_s(M_HEAD_BLK[SEL],NIL)
-  TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-  TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
-  k = base[p] //base
-  position[k] = position[k] +opt*(type[p] == PRG)
-  TRACE("want: [%d]",position[k])
-  position[k] = LIM(position[k],0,M_BLK_CNT[SEL] -1)
-  TRACE("get: [%d]",position[k])
-  advance_s(position[k])
-  TRACE("prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-  if(type[p] == STP) then
-    load_stp_from_prg_s() //to stps
-    SEL = STP
+tr_st_before = trig_change_w(tr_st_before,0)
+while(st_pos < st_cnt)
+  tr_st_before = trig_change_w(tr_st_before,st_pos)
+  cmd = st_cmd[st_pos]
+  opt = st_opt[st_pos]
+  p = var_range(cmd+0,10,5)
+  if(p >= 0) then //advance_s
+    TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+    TRACE("p: [%d], opt :[%d]",p,opt)
+    SEL = PRG //to prg
     GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
     reload_node_s(M_HEAD_BLK[SEL],NIL)
-    TRACE("stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
-    TRACE("want: [%d]",position[p]+opt)
-    position[p] = LIM(position[p]+opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
-    TRACE("get: [%d]",position[p])
-    advance_s(COM_BLK_CNT+position[p])
-    TRACE("stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-  end if  
-end if  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
+    k = base[p] //base
+    tr_update = trig_change_w(tr_update,position[k])
+    TRACE("want: [%d]",position[k] +opt*(type[p] == PRG))
+    position[k] = LIM(position[k] +opt*(type[p] == PRG),0,M_BLK_CNT[SEL] -1)
+    TRACE("GET: [%d]",position[k])
+    tr_update = trig_change_w(tr_update,position[k])
+    advance_s(position[k])
+    TRACE("prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    if((p == ps_prg)and trig_edge_w(tr_update)) then
+      SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
+      position[ps_stp] = 0
+      position[pw_stp] = 0
+      TRACE("   update")
+    end if
+    if(type[p] == STP) then
+      load_stp_from_prg_s() //to stps
+      SEL = STP
+      GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      TRACE("stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
+      TRACE("want: [%d]",position[p]+opt)
+      position[p] = LIM(position[p]+opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+      TRACE("GET: [%d]",position[p])
+      advance_s(COM_BLK_CNT+position[p])
+      TRACE("stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    end if
+  end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  p = var_range(cmd+0,cmd_view+PRG,1)
+  if(p >= 0) then //view prg
+    if not(pre_cmd_done) then
+      st_pos = st_pos + DIR_LEFT
+      st_cmd[st_pos] = cmd_advance + pw_prg
+      st_opt[st_pos] = 0
+      continue
+    end if
+    p = 0
+    TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+    SEL = PRG
+    while((M_CUR_BLK[SEL] > NIL)and(p < 10))
+      TRACE("print prg!!!: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      advance_s(DIR_RIGHT)
+      p = p +1
+    wend
+  end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  p = var_range(cmd+0,cmd_view+STP,1)
+  if(p >= 0) then //view stp
+    if not(pre_cmd_done) then
+      st_pos = st_pos + DIR_LEFT
+      st_cmd[st_pos] = cmd_advance + pw_stp
+      st_opt[st_pos] = 0
+      continue
+    end if
+    p = 0
+    TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+    SEL = STP
+    while((M_CUR_BLK[SEL] > NIL)and(p < 5))
+      TRACE("   print stp!!!: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      advance_s(DIR_RIGHT)
+      p = p +1
+    wend
+  end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  pre_cmd_done = trig_edge_w(tr_st_before) < 0
+  st_pos = st_pos +1
+wend
+TRACE("OK = %d",RES_STATE)
 //-------------------------------------------------------------
 end macro_command
