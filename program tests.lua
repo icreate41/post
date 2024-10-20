@@ -22,7 +22,7 @@ short RP_SAV_DAT = 1,RP_NEW_STP = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 1
 //todo
 int  M_HEAD_LOC[2]
 short M_BLK_CNT[2],M_HEAD_BLK[2],M_CUR_BLK[2],M_PRV_BLK[2],M_NXT_BLK[2]
-short SEL=0,PRG=0,STP=1
+short SEL=0,PRG=0,STP=1,LOC_OFST_HEAD=0,LOC_OFST_CNT=1
 short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //COMMON
 int   COM_TIM
@@ -64,8 +64,7 @@ sub load_stp_from_prg_s() //load_head_s()
     M_CUR_BLK [STP] = NIL
     M_PRV_BLK [STP] = NIL
     M_NXT_BLK [STP] = NIL
-    GetData(M_HEAD_BLK[STP],"Local HMI",RW,M_HEAD_LOC[STP]+0,1) 
-    //GetData(W_BLK_CNT[STP],"Local HMI",RW,M_HEAD_LOC[STP]+1,1) //подумай над этим
+    GetData(M_HEAD_BLK[STP],"Local HMI",RW,M_HEAD_LOC[STP]+LOC_OFST_HEAD,1) 
   end if  
 end sub
 //-------------------------------------------------------------
@@ -341,7 +340,7 @@ sub insert_node_s(short blk) //shift_next
     SetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
   else
     M_HEAD_BLK[SEL] = blk
-    SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+0,1)
+    SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
   end if
   if(M_CUR_BLK[SEL] > NIL) then
     SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_CUR_BLK[SEL],1)
@@ -350,7 +349,7 @@ sub insert_node_s(short blk) //shift_next
     SetData(chk ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_CUR_BLK[SEL],1)
   end if
   M_BLK_CNT[SEL] = M_BLK_CNT[SEL] +1
-  //SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+1,1)
+  SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
   M_NXT_BLK[SEL] = M_CUR_BLK[SEL]
   M_CUR_BLK[SEL] = blk
   chk = M_PRV_BLK[SEL] ^ M_NXT_BLK[SEL]
@@ -374,7 +373,7 @@ sub erase_node_s() //shift_next
     SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
   else
     M_HEAD_BLK[SEL] = M_NXT_BLK[SEL]
-    SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+0,1)
+    SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
   end if
   if(M_NXT_BLK[SEL] > NIL) then
     SetData(M_PRV_BLK[SEL],"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_NXT_BLK[SEL],1)
@@ -384,7 +383,7 @@ sub erase_node_s() //shift_next
   end if
   RES_BLK = M_CUR_BLK[SEL]
   M_BLK_CNT[SEL] = M_BLK_CNT[SEL] -1
-  //SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+1,1)
+  SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
   M_CUR_BLK[SEL] = M_NXT_BLK[SEL]
   M_NXT_BLK[SEL] = nxt
 end sub
@@ -838,7 +837,7 @@ macro_command main()
     init_values()
     //and read saved list
     //begin-----------------------------------------------------------------
-    GetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+    GetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
     M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
     while(RES_STATE and M_NXT_BLK[SEL] > NIL)
       set_block_s(M_NXT_BLK[SEL])
@@ -846,6 +845,7 @@ macro_command main()
       TRACE("   loaded: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_PRG_CNT)
     wend
+    SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
     reload_node_s(M_HEAD_BLK[SEL],NIL) //to begin, safe version of //advance_s(DIR_LEFT*(W_BLK_CNT] -1))
     //end-------------------------------------------------------------------
     TRACE("begin: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
@@ -940,7 +940,7 @@ macro_command main()
       load_stp_from_prg_s()
       SEL = STP
       M_HEAD_BLK[SEL] = NIL
-      SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+      SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
       while(RES_STATE and M_BLK_CNT[SEL] < (ij +COM_BLK_CNT))
         new_block_s()
         set_block_s(RES_BLK)
@@ -966,7 +966,7 @@ macro_command main()
       //and read saved list
       //begin---------------------------------------------------------------
       SEL = PRG
-      GetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+      GetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
       M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
       while(RES_STATE and M_NXT_BLK[SEL] > NIL)
         set_block_s(M_NXT_BLK[SEL])
@@ -982,11 +982,13 @@ macro_command main()
           TRACE("      loaded stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
           RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_STP_CNT +COM_BLK_CNT)
         wend
+        SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
         RES_STATE = RES_STATE and(M_BLK_CNT[SEL] > COM_BLK_CNT)
         //to prg
         SEL = PRG
         RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_PRG_CNT)
       wend
+      SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
       reload_node_s(M_HEAD_BLK[SEL],NIL)
       //end-----------------------------------------------------------------
       TRACE("begin: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
@@ -1038,7 +1040,7 @@ macro_command main()
         load_stp_from_prg_s()
         SEL = STP
         M_HEAD_BLK[SEL] = NIL
-        SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+        SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
         while(RES_STATE and M_BLK_CNT[SEL] < (COM_BLK_CNT +1))
           new_block_s()
           set_block_s(RES_BLK)
