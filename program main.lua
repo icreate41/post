@@ -462,7 +462,7 @@ short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //testing stack
 int st_cmd[10],st_opt[10],st_pos = 1, st_cnt = 1,pre_cmd_done = 0
-int cmd_advance = 10, cmd_insert = 20, cmd_view = 1000
+int cmd_advance = 10,cmd_insert = 20,cmd_erase = 30, cmd_view = 1000
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,cmd = 0,opt = 0
 int tr_update,tr_st_before
@@ -522,6 +522,7 @@ if(INIT() == true) then
         RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_STP_CNT +COM_BLK_CNT)
       wend
       SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
+TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
       RES_STATE = RES_STATE and(M_BLK_CNT[SEL] > COM_BLK_CNT)
       SEL = PRG //to prg
       RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_PRG_CNT)
@@ -681,7 +682,7 @@ while(st_pos < st_cnt)     //todo: check run state
       continue
     end if
     SEL = STP //to stps
-    if not((M_BLK_CNT[SEL] < (MAX_STP_CNT-COM_BLK_CNT))and(BLK_CNT < MAX_BLK_CNT)) then
+    if not((M_BLK_CNT[SEL] < (MAX_STP_CNT+COM_BLK_CNT))and(BLK_CNT < MAX_BLK_CNT)) then
       st_pos = st_pos + DIR_RIGHT
       continue
     end if
@@ -699,6 +700,75 @@ while(st_pos < st_cnt)     //todo: check run state
     TRACE("   insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     remove_rp_s() //delete restore point
     TRACE("!!!INSERTION DONE!!!")
+  end if
+  //-------------------------------------------------------------
+  p = var_range(cmd,cmd_erase+PRG,1)
+  if(p >= 0) then //erase prg
+    if not(pre_cmd_done) then
+      st_pos = st_pos + DIR_LEFT
+      st_cmd[st_pos] = cmd_advance + pw_prg
+      st_opt[st_pos] = 0
+      continue
+    end if
+    SEL = PRG //to prg
+    if not(M_BLK_CNT[SEL] > 1) then
+      st_pos = st_pos + DIR_RIGHT
+      continue
+    end if
+    //todo: run check
+    TRACE("!!!ERASE PRG!!!")
+    TRACE("blk cnt: [%d]",BLK_CNT)
+    opt = LIM(position[pw_prg] +opt,0,M_BLK_CNT[SEL] -1)
+    advance_s(opt -position[pw_prg])
+    create_rp_s(RP_DEL_BLK,NIL,NIL) //create restore point
+    update_retain_s()
+    load_stp_from_prg_s() //to stps
+    SEL = STP
+    GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
+    TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
+    M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
+    while(RES_STATE and M_NXT_BLK[SEL] > NIL)
+      reload_node_s(M_NXT_BLK[SEL],M_CUR_BLK[SEL])
+      TRACE("   stp deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      del_block_s(M_CUR_BLK[SEL])
+    wend
+    SEL = PRG //to prg
+    TRACE("prg deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    erase_node_s()
+    TRACE("prg after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    del_block_s(RES_BLK)
+    remove_rp_s() //delete restore point
+    TRACE("!!!ERASE DONE!!!")
+    TRACE("blk cnt: [%d]",BLK_CNT)
+  end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  p = var_range(cmd,cmd_erase+STP,1)
+  if(p >= 0) then //erase stp
+    if not(pre_cmd_done) then
+      st_pos = st_pos + DIR_LEFT
+      st_cmd[st_pos] = cmd_advance + pw_stp
+      st_opt[st_pos] = 0
+      continue
+    end if
+    SEL = STP //to stps
+    if not(M_BLK_CNT[SEL] > (COM_BLK_CNT +1)) then
+      st_pos = st_pos + DIR_RIGHT
+      continue
+    end if
+    //todo: run check
+    TRACE("!!!ERASE STP!!!")
+    TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
+    opt = LIM(position[pw_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+    advance_s(opt -position[pw_stp])
+    create_rp_s(RP_DEL_BLK,NIL,NIL) //create restore point
+    update_retain_s()
+    TRACE("stp deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    erase_node_s()
+    TRACE("stp after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    del_block_s(RES_BLK)
+    remove_rp_s() //delete restore point
+    TRACE("!!!ERASE DONE!!!")
+    TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
   end if
   //-------------------------------------------------------------
   p = var_range(cmd,cmd_view+PRG,1)
@@ -730,7 +800,7 @@ while(st_pos < st_cnt)     //todo: check run state
     p = 0
     TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
     SEL = STP
-    while((M_CUR_BLK[SEL] > NIL)and(p < 5))
+    while((M_CUR_BLK[SEL] > NIL)and(p < 10))
       TRACE("   print stp!!!: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       advance_s(DIR_RIGHT)
       p = p +1
