@@ -1,4 +1,10 @@
 //-------------------------------------------------------------
+//итог - чинить сохранение и чтение количества шагов
+//нужна кс для ...
+//switch type это пиздец
+//загрузка последней программы как текущей
+//load_node_s - проверка кол ва шагов
+//замени type на проверку base[p] == p
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
@@ -7,23 +13,26 @@ int CFG_OFST = 0,DAT_OFST = 1000,COM_ADD_SZ = 10,COM_REQ_SZ = 16
 int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 300,RP_DAT_OFST=32
 int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR
 //-------------------------------------------------------------
-int BO[3] = {0, 768, 792}, BITMAP[793],SD[2]
-short BUFF[300],SW[10],NIL = -1
+int BO[3] = {0, 768, 792}, BITMAP[793]
+short BUFF[300],NIL = -1
 short RP_SAV_DAT = 1,RP_NEW_STP = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 16,RESTORE = 0
 //todo
 //подумай на счёт того, чтобы добавить owner и modified флаг
 //возможно стоит вернуть слоты, но только меняя CUR_BLK,PRV_BLK,NXT_BLK (Owner ??)
 //todo
-short D_HEAD_LOC,W_BLK_CNT,W_HEAD_BLK,W_CUR_BLK,W_PRV_BLK,W_NXT_BLK
+int  M_HEAD_LOC[2]
+short M_BLK_CNT[2],M_HEAD_BLK[2],M_CUR_BLK[2],M_PRV_BLK[2],M_NXT_BLK[2]
+short SEL=0,PRG=0,STP=1
 short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
-bool  RES_STATE,TYP_PRG=0,TYP_STP=1
+bool  RES_STATE
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
   BLK_PLD_SZ  = STP_ADD_SZ + STP_REQ_SZ
+  //BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ   -3)*(BLK_PLD_SZ <   3)
   BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ -128)*(BLK_PLD_SZ > 128)
   STP_REQ_SZ  = BLK_PLD_SZ - STP_ADD_SZ
   BLK_SZ      = BLK_HDR_SZ +BLK_PLD_SZ
@@ -34,57 +43,48 @@ sub init_values()
   COM_BLK_CNT  =(COM_REQ_SZ +(BLK_PLD_SZ -1))/(BLK_PLD_SZ)
   COM_BLK_CNT  = COM_BLK_CNT+COM_BLK_OFST
   BLK_CNT = 0
-  RES_BLK = -1
-  D_HEAD_LOC = 0
-  W_BLK_CNT  = 0
-  W_HEAD_BLK = 2
-  W_CUR_BLK  = 3
-  W_PRV_BLK  = 4
-  W_NXT_BLK  = 5
+  RES_BLK = NIL
   COM_TIM = 0
   COM_POS = 0
   COM_REP = 0
-  SD[0] = CFG_OFST +32
-  SD[1] = CFG_OFST +33
-  FILL(SW[0],0,2)
-  FILL(SW[2],NIL,8)
+  M_HEAD_LOC[PRG] = CFG_OFST +32 //тут два шорта, 1 - голова, 2 - количество блоков
+  M_HEAD_LOC[STP] = CFG_OFST +34 //тут
+  FILL(M_BLK_CNT [0],0,2) //стоит удалить и оставить только NIL, подгрузку сделать как load_head
+  FILL(M_HEAD_BLK[0],NIL,2)
+  FILL(M_CUR_BLK [0],NIL,2)
+  FILL(M_PRV_BLK [0],NIL,2)
+  FILL(M_NXT_BLK [0],NIL,2)
   FILL(BITMAP[0],-1,793)
 end sub
 //-------------------------------------------------------------
-sub switch_type(bool type)
-  D_HEAD_LOC = 0 + type
-  W_BLK_CNT  = 0 + type
-  W_HEAD_BLK = 2 + 4*type
-  W_CUR_BLK  = 3 + 4*type
-  W_PRV_BLK  = 4 + 4*type
-  W_NXT_BLK  = 5 + 4*type
-end sub
-//-------------------------------------------------------------
-sub load_stp_from_prg_s()
+sub load_stp_from_prg_s() //load_head_s()
   if(RES_STATE) then
-    SD[1] = DAT_OFST+BLK_HDR_SZ+BLK_SZ*SW[3]
-    SW[1] = 0 //ввести как параметр ???
-    FILL(SW[6],NIL,4)
-    GetData(SW[6],"Local HMI",RW,SD[1],1) 
+    M_HEAD_LOC[STP] = DAT_OFST+BLK_HDR_SZ+BLK_SZ*M_CUR_BLK[PRG]
+    M_BLK_CNT [STP] = 0
+    M_CUR_BLK [STP] = NIL
+    M_PRV_BLK [STP] = NIL
+    M_NXT_BLK [STP] = NIL
+    GetData(M_HEAD_BLK[STP],"Local HMI",RW,M_HEAD_LOC[STP]+0,1) 
+    //GetData(W_BLK_CNT[STP],"Local HMI",RW,M_HEAD_LOC[STP]+1,1) //подумай над этим
   end if  
 end sub
 //-------------------------------------------------------------
-sub get_prg_com_from_cur_s()
-  if(RES_STATE) then
-    COM_TIM =(BUFF[0]&0xFFFF)|(BUFF[1]<<16)
-    COM_POS = BUFF[2]
-    COM_REP = BUFF[3]
-    COM_TIM = COM_TIM -(COM_TIM -1)*(COM_TIM < 1)
-    COM_TIM = COM_TIM -(COM_TIM -(3600*24*365))*(COM_TIM > (3600*24*365))
+//sub get_prg_com_from_cur_s()
+//  if(RES_STATE) then
+    //COM_TIM =(BUFF[0]&0xFFFF)|(BUFF[1]<<16)
+    //COM_POS = BUFF[2]
+    //COM_REP = BUFF[3]
+    //COM_TIM = COM_TIM -(COM_TIM -1)*(COM_TIM < 1)
+    //COM_TIM = COM_TIM -(COM_TIM -(3600*24*365))*(COM_TIM > (3600*24*365))
     //todo
     //todo
     //todo
-    COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //надо адвансить к run slot cur stp
-    COM_POS = COM_POS -(COM_POS -SW[W_BLK_CNT])*(COM_POS >= SW[W_BLK_CNT])
-    COM_REP = COM_REP -(COM_REP -0)*(COM_REP < 0)
-    COM_REP = COM_REP -(COM_REP -999)*(COM_REP > 999)
-  end if
-end sub
+    //COM_POS = COM_POS -(COM_POS -0)*(COM_POS < 0) //вот херня
+    //COM_POS = COM_POS -(COM_POS -W_BLK_CNT])*(COM_POS >= W_BLK_CNT])
+    //COM_REP = COM_REP -(COM_REP -0)*(COM_REP < 0)
+    //COM_REP = COM_REP -(COM_REP -999)*(COM_REP > 999)
+  //end if
+//end sub
 //-------------------------------------------------------------
 sub create_rp_s(int op, int opt, int count)
   short dc
@@ -92,19 +92,19 @@ sub create_rp_s(int op, int opt, int count)
   if not(RES_STATE) then
     return
   end if
-  LOWORD(SD[D_HEAD_LOC],BUFF[8])
-  HIWORD(SD[D_HEAD_LOC],BUFF[9])
-  BUFF[10] = SW[W_BLK_CNT ]
-  BUFF[11] = SW[W_HEAD_BLK]
-  BUFF[12] = SW[W_CUR_BLK ]
-  BUFF[13] = SW[W_PRV_BLK ]
-  BUFF[14] = SW[W_NXT_BLK ]
+  LOWORD(M_HEAD_LOC[SEL],BUFF[8]) //тут
+  HIWORD(M_HEAD_LOC[SEL],BUFF[9]) //тут
+  BUFF[10] = M_BLK_CNT [SEL]
+  BUFF[11] = M_HEAD_BLK[SEL]
+  BUFF[12] = M_CUR_BLK [SEL]
+  BUFF[13] = M_PRV_BLK [SEL]
+  BUFF[14] = M_NXT_BLK [SEL]
   BUFF[15] = BLK_CNT
   BUFF[16] = RES_BLK
   if     (op&RP_NEW_PRG) then
-    BUFF[10] = SW[W_BLK_CNT ] +1 //simulate successful insertion
+    BUFF[10] = M_BLK_CNT[SEL] +1 //simulate successful insertion
     BUFF[12] = opt               //simulate CUR_BLK
-    BUFF[14] = SW[W_CUR_BLK ]    //simulate NXT_BLK
+    BUFF[14] = M_CUR_BLK[SEL]    //simulate NXT_BLK
   else if(op&RP_SAV_DAT) then
     dc = dc  + count
   else if(op&RP_SWP_BLK) then
@@ -116,7 +116,6 @@ sub create_rp_s(int op, int opt, int count)
   BUFF[2] = DATA_TYPE
   BUFF[3] = op
   CRC(BUFF[0],BUFF[dc],dc)
-TRACE("CHK1 = 0x%x",BUFF[dc])
   SetData(BUFF[0],"Local HMI",RW,CFG_OFST+64,dc +1)
 end sub
 //-------------------------------------------------------------
@@ -130,10 +129,8 @@ sub load_rp_s()
     RESTORE = RESTORE and(BUFF[1] == VERSION)
     RESTORE = RESTORE and(BUFF[2] == DATA_TYPE)
   end if
-TRACE("RESTORE 1 = %d",RESTORE)
   if(RESTORE) then
     CRC(BUFF[0],chk,BUFF[0])
-TRACE("CHK2 = 0x%x",chk)
     RESTORE = RESTORE and(chk == BUFF[BUFF[0]])
     dw = (BUFF[8]&0xFFFF)|(BUFF[9]<<16)
     RESTORE = RESTORE and(dw > CFG_OFST)and(dw < (DAT_OFST + MAX_DAT_SZ))
@@ -149,17 +146,16 @@ TRACE("CHK2 = 0x%x",chk)
     else if(BUFF[3]&RP_SWP_BLK) then
       RES_VAR = BUFF[24]
     end if
-TRACE("Restore Point Was Found, ALLOW = %d", RESTORE)
+    TRACE("Restore Point Was Found, ALLOW = %d", RESTORE)
   end if
-TRACE("RESTORE 2 = %d",RESTORE)
   if(RESTORE) then
     RESTORE = BUFF[3]
-    SD[D_HEAD_LOC] = dw
-    SW[W_BLK_CNT ] = BUFF[10]
-    SW[W_HEAD_BLK] = BUFF[11]
-    SW[W_CUR_BLK ] = BUFF[12]
-    SW[W_PRV_BLK ] = BUFF[13]
-    SW[W_NXT_BLK ] = BUFF[14]
+    M_HEAD_LOC[SEL] = dw //тут
+    M_BLK_CNT [SEL] = BUFF[10]
+    M_HEAD_BLK[SEL] = BUFF[11]
+    M_CUR_BLK [SEL] = BUFF[12]
+    M_PRV_BLK [SEL] = BUFF[13]
+    M_NXT_BLK [SEL] = BUFF[14]
     BLK_CNT = BUFF[15]
     RES_BLK = BUFF[16]
     //todo
@@ -191,8 +187,8 @@ end sub
 sub load_store_data_s(int op, int ofst, int req)
   short tmp,blk,prv,nxt,chk,dc = 0
   RES_STATE = RES_STATE and((req +ofst) <= MAX_BUF_SZ)and(req >=0)and(ofst >=0)
-  blk = SW[W_CUR_BLK]
-  prv = SW[W_PRV_BLK]
+  blk = M_CUR_BLK[SEL]
+  prv = M_PRV_BLK[SEL]
   while(RES_STATE and dc < req)
     RES_STATE = RES_STATE and(blk > NIL)and(blk < MAX_BLK_CNT)
     if(RES_STATE) then
@@ -264,9 +260,9 @@ sub reload_node_s(short blk, short prev_blk)
     RES_STATE = RES_STATE and(chk == (prv ^ nxt))
   end if
   if(RES_STATE) then
-    SW[W_CUR_BLK] = blk
-    SW[W_PRV_BLK] = prv
-    SW[W_NXT_BLK] = nxt  
+    M_CUR_BLK[SEL] = blk
+    M_PRV_BLK[SEL] = prv
+    M_NXT_BLK[SEL] = nxt  
   end if
 end sub
 //-------------------------------------------------------------
@@ -282,48 +278,48 @@ sub load_node_s(short blk, short prev_blk)
     RES_STATE = RES_STATE and(chk == (prv ^ nxt))
   end if
   if(RES_STATE) then
-    SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
-    SW[W_CUR_BLK] = blk
-    SW[W_PRV_BLK] = prv
-    SW[W_NXT_BLK] = nxt
+    M_BLK_CNT[SEL] = M_BLK_CNT[SEL] +1 //вот тут бы проверчку сделать...
+    M_CUR_BLK[SEL] = blk
+    M_PRV_BLK[SEL] = prv
+    M_NXT_BLK[SEL] = nxt
   end if  
 end sub
 //-------------------------------------------------------------
-sub advance_s(short shift)
+sub advance_s(int shift)
   short prv,nxt,chk
   while(RES_STATE and shift)
     prv = NIL
     nxt = NIL
-    RES_STATE = RES_STATE and not((SW[W_PRV_BLK]>NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
+    RES_STATE = RES_STATE and not((M_PRV_BLK[SEL]>NIL)and(M_CUR_BLK[SEL]<=NIL)and(M_NXT_BLK[SEL]>NIL))
     if(shift > 0) then
-      RES_STATE = RES_STATE and((SW[W_CUR_BLK] > NIL)or(SW[W_NXT_BLK] > NIL))
-      if(SW[W_NXT_BLK] > NIL) then
-        GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_NXT_BLK],1)
-        GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_NXT_BLK],1)
-        GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_NXT_BLK],1)
-        RES_STATE = RES_STATE and(prv == SW[W_CUR_BLK])
+      RES_STATE = RES_STATE and((M_CUR_BLK[SEL] > NIL)or(M_NXT_BLK[SEL] > NIL))
+      if(M_NXT_BLK[SEL] > NIL) then
+        GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_NXT_BLK[SEL],1)
+        GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_NXT_BLK[SEL],1)
+        GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_NXT_BLK[SEL],1)
+        RES_STATE = RES_STATE and(prv == M_CUR_BLK[SEL])
         RES_STATE = RES_STATE and(nxt >= NIL)and(nxt < MAX_BLK_CNT)
         RES_STATE = RES_STATE and(chk == (prv ^ nxt))
       end if
       if(RES_STATE) then
-        SW[W_PRV_BLK] = SW[W_CUR_BLK]
-        SW[W_CUR_BLK] = SW[W_NXT_BLK]
-        SW[W_NXT_BLK] = nxt
+        M_PRV_BLK[SEL] = M_CUR_BLK[SEL]
+        M_CUR_BLK[SEL] = M_NXT_BLK[SEL]
+        M_NXT_BLK[SEL] = nxt
       end if
     else if(shift < 0) then
-      RES_STATE = RES_STATE and((SW[W_CUR_BLK] > NIL)or(SW[W_PRV_BLK] > NIL))
-      if(SW[W_PRV_BLK] > NIL) then
-        GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
-        GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
-        GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+      RES_STATE = RES_STATE and((M_CUR_BLK[SEL] > NIL)or(M_PRV_BLK[SEL] > NIL))
+      if(M_PRV_BLK[SEL] > NIL) then
+        GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_PRV_BLK[SEL],1)
+        GetData(nxt,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_PRV_BLK[SEL],1)
+        GetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
         RES_STATE = RES_STATE and(prv >= NIL)and(prv < MAX_BLK_CNT)
-        RES_STATE = RES_STATE and(nxt == SW[W_CUR_BLK])
+        RES_STATE = RES_STATE and(nxt == M_CUR_BLK[SEL])
         RES_STATE = RES_STATE and(chk == (prv ^ nxt))
       end if
       if(RES_STATE) then
-        SW[W_NXT_BLK] = SW[W_CUR_BLK]
-        SW[W_CUR_BLK] = SW[W_PRV_BLK]
-        SW[W_PRV_BLK] = prv
+        M_NXT_BLK[SEL] = M_CUR_BLK[SEL]
+        M_CUR_BLK[SEL] = M_PRV_BLK[SEL]
+        M_PRV_BLK[SEL] = prv
       end if
     end if
     shift = shift -(shift > 0) +(shift < 0)
@@ -333,62 +329,64 @@ end sub
 sub insert_node_s(short blk) //shift_next
   short prv,nxt,chk
   RES_STATE = RES_STATE and(blk > NIL)
-  RES_STATE = RES_STATE and not((SW[W_PRV_BLK]> NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
-  RES_STATE = RES_STATE and not((SW[W_PRV_BLK]<=NIL)and(SW[W_CUR_BLK]<=NIL)and(SW[W_NXT_BLK]>NIL))
+  RES_STATE = RES_STATE and not((M_PRV_BLK[SEL]> NIL)and(M_CUR_BLK[SEL]<=NIL)and(M_NXT_BLK[SEL]>NIL))
+  RES_STATE = RES_STATE and not((M_PRV_BLK[SEL]<=NIL)and(M_CUR_BLK[SEL]<=NIL)and(M_NXT_BLK[SEL]>NIL))
   if not(RES_STATE) then
     return
   end if
-  if(SW[W_PRV_BLK] > NIL) then
-    GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
+  if(M_PRV_BLK[SEL] > NIL) then
+    GetData(prv,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_PRV_BLK[SEL],1)
     chk = prv ^ blk
-    SetData(blk,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
-    SetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+    SetData(blk,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_PRV_BLK[SEL],1)
+    SetData(chk,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
   else
-    SW[W_HEAD_BLK] = blk
-    SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+    M_HEAD_BLK[SEL] = blk
+    SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+0,1)
   end if
-  if(SW[W_CUR_BLK] > NIL) then
-    SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
-    GetData(nxt ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
+  if(M_CUR_BLK[SEL] > NIL) then
+    SetData(blk ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_CUR_BLK[SEL],1)
+    GetData(nxt ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_CUR_BLK[SEL],1)
     chk = nxt ^ blk
-    SetData(chk ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+    SetData(chk ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_CUR_BLK[SEL],1)
   end if
-  SW[W_BLK_CNT] = SW[W_BLK_CNT] +1
-  SW[W_NXT_BLK] = SW[W_CUR_BLK]
-  SW[W_CUR_BLK] = blk
-  chk = SW[W_PRV_BLK] ^ SW[W_NXT_BLK]
-  SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_CUR_BLK],1)
-  SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_CUR_BLK],1)
-  SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_CUR_BLK],1)
+  M_BLK_CNT[SEL] = M_BLK_CNT[SEL] +1
+  //SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+1,1)
+  M_NXT_BLK[SEL] = M_CUR_BLK[SEL]
+  M_CUR_BLK[SEL] = blk
+  chk = M_PRV_BLK[SEL] ^ M_NXT_BLK[SEL]
+  SetData(M_PRV_BLK[SEL],"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_CUR_BLK[SEL],1)
+  SetData(M_NXT_BLK[SEL],"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_CUR_BLK[SEL],1)
+  SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_CUR_BLK[SEL],1)
 end sub
 //-------------------------------------------------------------
 sub erase_node_s() //shift_next    
   short prv,nxt,chk
-  RES_STATE = RES_STATE and(SW[W_CUR_BLK] > NIL)
+  RES_STATE = RES_STATE and(M_CUR_BLK[SEL] > NIL)
   if not(RES_STATE) then
     return
   end if
   prv = NIL
   nxt = NIL
-  if(SW[W_PRV_BLK] > NIL) then
-    GetData(prv          ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_PRV_BLK],1)
-    chk = prv ^ SW[W_NXT_BLK]
-    SetData(SW[W_NXT_BLK],"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_PRV_BLK],1)
-    SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_PRV_BLK],1)
+  if(M_PRV_BLK[SEL] > NIL) then
+    GetData(prv          ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_PRV_BLK[SEL],1)
+    chk = prv ^ M_NXT_BLK[SEL]
+    SetData(M_NXT_BLK[SEL],"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_PRV_BLK[SEL],1)
+    SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
   else
-    SW[W_HEAD_BLK] = SW[W_NXT_BLK]
-    SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
+    M_HEAD_BLK[SEL] = M_NXT_BLK[SEL]
+    SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+0,1)
   end if
-  if(SW[W_NXT_BLK] > NIL) then
-    SetData(SW[W_PRV_BLK],"Local HMI",RW,DAT_OFST+0+BLK_SZ*SW[W_NXT_BLK],1)
-    GetData(nxt          ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*SW[W_NXT_BLK],1)
-    chk = nxt ^ SW[W_PRV_BLK]
-    SetData(chk          ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*SW[W_NXT_BLK],1)
+  if(M_NXT_BLK[SEL] > NIL) then
+    SetData(M_PRV_BLK[SEL],"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_NXT_BLK[SEL],1)
+    GetData(nxt               ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_NXT_BLK[SEL],1)
+    chk = nxt ^ M_PRV_BLK[SEL]
+    SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_NXT_BLK[SEL],1)
   end if
-  RES_BLK = SW[W_CUR_BLK]
-  SW[W_BLK_CNT] = SW[W_BLK_CNT] -1
-  SW[W_CUR_BLK] = SW[W_NXT_BLK]
-  SW[W_NXT_BLK] = nxt
+  RES_BLK = M_CUR_BLK[SEL]
+  M_BLK_CNT[SEL] = M_BLK_CNT[SEL] -1
+  //SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+1,1)
+  M_CUR_BLK[SEL] = M_NXT_BLK[SEL]
+  M_NXT_BLK[SEL] = nxt
 end sub
 //-------------------------------------------------------------
 sub set_block_s(int blk)
@@ -616,8 +614,8 @@ macro_command main()
     erase_node_s()
     del_block_s(RES_BLK)
     
-    //TRACE("delete  [%d] %d %d %d",ii,SW[W_PRV_BLK],SW[W_CUR_BLK],SW[W_NXT_BLK])
-    if(SW[W_BLK_CNT] <> (ii -1) or not RES_STATE) then
+    //TRACE("delete  [%d] %d %d %d",ii,W_PRV_BLK],W_CUR_BLK],W_NXT_BLK])
+    if(M_BLK_CNT[SEL] <> (ii -1) or not RES_STATE) then
       TRACE("Failed")
     else
       passed_count = passed_count +1
@@ -732,23 +730,23 @@ macro_command main()
     create_rp_s(RP_NEW_STP,NIL,NIL)
     update_retain_s()
     //
-    T_HEAD_LOC = SD[D_HEAD_LOC]
-    T_BLK_CNT  = SW[W_BLK_CNT ]
-    T_HEAD_BLK = SW[W_HEAD_BLK]
-    T_CUR_BLK  = SW[W_CUR_BLK ]
-    T_PRV_BLK  = SW[W_PRV_BLK ]
-    T_NXT_BLK  = SW[W_NXT_BLK ]
+    T_HEAD_LOC = M_HEAD_LOC[SEL]
+    T_BLK_CNT  = M_BLK_CNT [SEL]
+    T_HEAD_BLK = M_HEAD_BLK[SEL]
+    T_CUR_BLK  = M_CUR_BLK [SEL]
+    T_PRV_BLK  = M_PRV_BLK [SEL]
+    T_NXT_BLK  = M_NXT_BLK [SEL]
     TBLK_CNT   = BLK_CNT
     TRES_BLK   = RES_BLK
     init_values()
     load_rp_s()
     //end-------------------------------------------------------------------
-    RES_STATE == RES_STATE and (SD[D_HEAD_LOC] == T_HEAD_LOC)
-    RES_STATE == RES_STATE and (SW[W_BLK_CNT ] == T_BLK_CNT)
-    RES_STATE == RES_STATE and (SW[W_HEAD_BLK] == T_HEAD_BLK)
-    RES_STATE == RES_STATE and (SW[W_CUR_BLK ] == T_CUR_BLK)
-    RES_STATE == RES_STATE and (SW[W_PRV_BLK ] == T_PRV_BLK)
-    RES_STATE == RES_STATE and (SW[W_NXT_BLK ] == T_NXT_BLK)
+    RES_STATE == RES_STATE and (M_HEAD_LOC[SEL] == T_HEAD_LOC)
+    RES_STATE == RES_STATE and (M_BLK_CNT [SEL] == T_BLK_CNT)
+    RES_STATE == RES_STATE and (M_HEAD_BLK[SEL] == T_HEAD_BLK)
+    RES_STATE == RES_STATE and (M_CUR_BLK [SEL] == T_CUR_BLK)
+    RES_STATE == RES_STATE and (M_PRV_BLK [SEL] == T_PRV_BLK)
+    RES_STATE == RES_STATE and (M_NXT_BLK [SEL] == T_NXT_BLK)
     RES_STATE == RES_STATE and (BLK_CNT == TBLK_CNT)
     RES_STATE == RES_STATE and (RES_BLK == TRES_BLK)
     RES_STATE = RES_STATE and RESTORE == RP_NEW_STP
@@ -767,14 +765,14 @@ macro_command main()
       for ii = 0 to 1
         init_values()
         load_rp_s()
-        TRACE("before: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("before: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         if(RESTORE&RP_NEW_STP) then
           insert_node_s(RES_BLK)
-          TRACE("after: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+          TRACE("after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         end if
-        ij = ij and(RESTORE == RP_NEW_STP)and(RES_STATE)and(BLK_CNT==3)and(SW[W_BLK_CNT]==3)
-        ij = ij and(SW[W_CUR_BLK]==2)and(SW[W_PRV_BLK]==1)and(SW[W_NXT_BLK]==0)
-        //ij = ij and(SW[W_CUR_BLK]==0)and(SW[W_PRV_BLK]==NIL)and(SW[W_NXT_BLK]==NIL)
+        ij = ij and(RESTORE == RP_NEW_STP)and(RES_STATE)and(BLK_CNT==3)and(M_BLK_CNT[SEL]==3)
+        ij = ij and(M_CUR_BLK[SEL]==2)and(M_PRV_BLK[SEL]==1)and(M_NXT_BLK[SEL]==0)
+        //ij = ij and(W_CUR_BLK]==0)and(W_PRV_BLK]==NIL)and(W_NXT_BLK]==NIL)
       next
       remove_rp_s()
       //end-------------------------------------------------------------------
@@ -792,30 +790,30 @@ macro_command main()
     test_count = test_count +1
     TRACE("Testing switching")
     //begin-----------------------------------------------------------------
-    switch_type(TYP_PRG)
-    SD[D_HEAD_LOC] = 1
-    SW[W_HEAD_BLK] = 2
-    SW[W_BLK_CNT ] = 3
-    switch_type(TYP_STP)
-    SD[D_HEAD_LOC] = 11
-    SW[W_HEAD_BLK] = 12
-    SW[W_BLK_CNT ] = 13
-    switch_type(TYP_PRG)
-    SW[W_CUR_BLK ] = 4
-    SW[W_PRV_BLK ] = 5
-    SW[W_NXT_BLK ] = 6
-    switch_type(TYP_STP)
-    SW[W_CUR_BLK ] = 14
-    SW[W_PRV_BLK ] = 15
-    SW[W_NXT_BLK ] = 16
+    SEL = PRG
+    M_HEAD_LOC[SEL] = 1
+    M_HEAD_BLK[SEL] = 2
+    M_BLK_CNT [SEL] = 3
+    SEL = STP
+    M_HEAD_LOC[SEL] = 11
+    M_HEAD_BLK[SEL] = 12
+    M_BLK_CNT [SEL] = 13
+    SEL = PRG
+    M_CUR_BLK [SEL] = 4
+    M_PRV_BLK [SEL] = 5
+    M_NXT_BLK [SEL] = 6
+    SEL = STP
+    M_CUR_BLK [SEL] = 14
+    M_PRV_BLK [SEL] = 15
+    M_NXT_BLK [SEL] = 16
     //end-------------------------------------------------------------------
-    switch_type(TYP_PRG)
+    SEL = PRG
     ij = 1
-    ij = ij and SD[D_HEAD_LOC] == 1 and SW[W_HEAD_BLK] == 2 and SW[W_BLK_CNT ] == 3
-    ij = ij and SW[W_CUR_BLK ] == 4 and SW[W_PRV_BLK ] == 5 and SW[W_NXT_BLK ] == 6
-    switch_type(TYP_STP)
-    ij = ij and SD[D_HEAD_LOC] == 11 and SW[W_HEAD_BLK] == 12 and SW[W_BLK_CNT ] == 13
-    ij = ij and SW[W_CUR_BLK ] == 14 and SW[W_PRV_BLK ] == 15 and SW[W_NXT_BLK ] == 16
+    ij = ij and M_HEAD_LOC[SEL] == 1 and M_HEAD_BLK[SEL] == 2 and M_BLK_CNT [SEL] == 3
+    ij = ij and M_CUR_BLK [SEL] == 4 and M_PRV_BLK [SEL] == 5 and M_NXT_BLK [SEL] == 6
+    SEL = STP
+    ij = ij and M_HEAD_LOC[SEL] == 11 and M_HEAD_BLK[SEL] == 12 and M_BLK_CNT [SEL] == 13
+    ij = ij and M_CUR_BLK [SEL] == 14 and M_PRV_BLK [SEL] == 15 and M_NXT_BLK [SEL] == 16
     if not(ij) then
       TRACE("Failed")
     else
@@ -831,7 +829,7 @@ macro_command main()
     TRACE("#1 load test")
     //firstly create list of 5 nodes
     ii = 5
-    while(RES_STATE and SW[W_BLK_CNT] < ii)
+    while(RES_STATE and M_BLK_CNT[SEL] < ii)
       new_block_s()
       set_block_s(RES_BLK)
       insert_node_s(RES_BLK)
@@ -840,20 +838,20 @@ macro_command main()
     init_values()
     //and read saved list
     //begin-----------------------------------------------------------------
-    GetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-    SW[W_NXT_BLK] = SW[W_HEAD_BLK]
-    while(RES_STATE and SW[W_NXT_BLK] > NIL)
-      set_block_s(SW[W_NXT_BLK])
-      load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
-      TRACE("   loaded: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-      RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
+    GetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+    M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
+    while(RES_STATE and M_NXT_BLK[SEL] > NIL)
+      set_block_s(M_NXT_BLK[SEL])
+      load_node_s(M_NXT_BLK[SEL],M_CUR_BLK[SEL])
+      TRACE("   loaded: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_PRG_CNT)
     wend
-    reload_node_s(SW[W_HEAD_BLK],NIL) //to begin, safe version of //advance_s(DIR_LEFT*(SW[W_BLK_CNT] -1))
+    reload_node_s(M_HEAD_BLK[SEL],NIL) //to begin, safe version of //advance_s(DIR_LEFT*(W_BLK_CNT] -1))
     //end-------------------------------------------------------------------
-    TRACE("begin: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-    TRACE("count %d",SW[W_BLK_CNT])
+    TRACE("begin: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    TRACE("count %d",M_BLK_CNT[SEL])
     //check result
-    if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+    if(M_BLK_CNT[SEL] <> ii or not RES_STATE) then
       TRACE("Failed - #1 load test, breaking...")
     else
       passed_count = passed_count +1
@@ -863,27 +861,27 @@ macro_command main()
     if(true and RES_STATE) then
       test_count = test_count +1
       TRACE("#2 insert test")
-      ii = SW[W_BLK_CNT] +1
+      ii = M_BLK_CNT[SEL] +1
       ij = 3 //insert position
       //begin---------------------------------------------------------------
-      reload_node_s(SW[W_HEAD_BLK],NIL)
-      if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      if(ij >= 0 and ij <= M_BLK_CNT[SEL]) then
         advance_s(DIR_RIGHT*ij)
         new_block_s()
         set_block_s(RES_BLK)
         insert_node_s(RES_BLK)
-        TRACE("insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("insertion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       end if
       //end-----------------------------------------------------------------
-      TRACE("count %d",SW[W_BLK_CNT])
+      TRACE("count %d",M_BLK_CNT[SEL])
       //view
-      reload_node_s(SW[W_HEAD_BLK],NIL)
-      while(RES_STATE and SW[W_CUR_BLK] > NIL)
-        TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      while(RES_STATE and M_CUR_BLK[SEL] > NIL)
+        TRACE("   view: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         advance_s(DIR_RIGHT)
       wend      
       //check result
-      if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+      if(M_BLK_CNT[SEL] <> ii or not RES_STATE) then
         TRACE("Failed - #2 insert test, breaking...")
       else
         passed_count = passed_count +1
@@ -894,26 +892,26 @@ macro_command main()
     if(true and RES_STATE) then
       test_count = test_count +1
       TRACE("#3 deletion test")
-      ii = SW[W_BLK_CNT] -1
+      ii = M_BLK_CNT[SEL] -1
       ij = 3 //deletion position
       //begin---------------------------------------------------------------
-      reload_node_s(SW[W_HEAD_BLK],NIL)
-      if(ij >= 0 and ij < SW[W_BLK_CNT]) then
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      if(ij >= 0 and ij < M_BLK_CNT[SEL]) then
         advance_s(DIR_RIGHT*ij)
-        TRACE("deletion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         erase_node_s()
         del_block_s(RES_BLK)
       end if
       //end-----------------------------------------------------------------
-      TRACE("count %d",SW[W_BLK_CNT])
+      TRACE("count %d",M_BLK_CNT[SEL])
       //view
-      reload_node_s(SW[W_HEAD_BLK],NIL)
-      while(RES_STATE and SW[W_CUR_BLK] > NIL)
-        TRACE("   view: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      while(RES_STATE and M_CUR_BLK[SEL] > NIL)
+        TRACE("   view: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         advance_s(DIR_RIGHT)
       wend        
       //check result
-      if(SW[W_BLK_CNT] <> ii or not RES_STATE) then
+      if(M_BLK_CNT[SEL] <> ii or not RES_STATE) then
         TRACE("Failed - #3 deletion test, breaking...")
       else
         passed_count = passed_count +1
@@ -931,23 +929,27 @@ macro_command main()
     ii = 4 //prog count
     ij = 4 //steps count in prog
     //begin---------------------------------------------------------------
-    switch_type(TYP_PRG)
-    while(RES_STATE and SW[W_BLK_CNT] < ii)
+    SEL = PRG
+    while(RES_STATE and M_BLK_CNT[SEL] < ii)
       new_block_s()
       set_block_s(RES_BLK)
+      TRACE("   prg before: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       insert_node_s(RES_BLK)
+      TRACE("   prg after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       //to stps
       load_stp_from_prg_s()
-      switch_type(TYP_STP)
-      SW[W_HEAD_BLK] = NIL
-      SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-      while(RES_STATE and SW[W_BLK_CNT] < (ij +COM_BLK_CNT))
+      SEL = STP
+      M_HEAD_BLK[SEL] = NIL
+      SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+      while(RES_STATE and M_BLK_CNT[SEL] < (ij +COM_BLK_CNT))
         new_block_s()
         set_block_s(RES_BLK)
+        TRACE("      stp before: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         insert_node_s(RES_BLK)
+        TRACE("      stp after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       wend
       //back to prgs
-      switch_type(TYP_PRG)
+      SEL = PRG
     wend
     //end-----------------------------------------------------------------
     if(BLK_CNT <> (ii + ii*(COM_BLK_CNT+ij))or not RES_STATE) then
@@ -963,32 +965,32 @@ macro_command main()
     if(true and RES_STATE) then
       //and read saved list
       //begin---------------------------------------------------------------
-      switch_type(TYP_PRG)
-      GetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-      SW[W_NXT_BLK] = SW[W_HEAD_BLK]
-      while(RES_STATE and SW[W_NXT_BLK] > NIL)
-        set_block_s(SW[W_NXT_BLK])
-        load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
-        TRACE("   loaded prg head: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+      SEL = PRG
+      GetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+      M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
+      while(RES_STATE and M_NXT_BLK[SEL] > NIL)
+        set_block_s(M_NXT_BLK[SEL])
+        load_node_s(M_NXT_BLK[SEL],M_CUR_BLK[SEL])
+        TRACE("   loaded prg head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         //to stps
         load_stp_from_prg_s()
-        switch_type(TYP_STP)
-        SW[W_NXT_BLK] = SW[W_HEAD_BLK] //добавть в функцию load_stp_from_prg_s??
-        while(RES_STATE and SW[W_NXT_BLK] > NIL)
-          set_block_s(SW[W_NXT_BLK])
-          load_node_s(SW[W_NXT_BLK],SW[W_CUR_BLK])
-          TRACE("      loaded stp head: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-          RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_STP_CNT +COM_BLK_CNT)
+        SEL = STP
+        M_NXT_BLK[SEL] = M_HEAD_BLK[SEL] //добавть в функцию load_stp_from_prg_s??
+        while(RES_STATE and M_NXT_BLK[SEL] > NIL)
+          set_block_s(M_NXT_BLK[SEL])
+          load_node_s(M_NXT_BLK[SEL],M_CUR_BLK[SEL])
+          TRACE("      loaded stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+          RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_STP_CNT +COM_BLK_CNT)
         wend
-        RES_STATE = RES_STATE and(SW[W_BLK_CNT] > COM_BLK_CNT)
+        RES_STATE = RES_STATE and(M_BLK_CNT[SEL] > COM_BLK_CNT)
         //to prg
-        switch_type(TYP_PRG)
-        RES_STATE = RES_STATE and(SW[W_BLK_CNT] <= MAX_PRG_CNT)
+        SEL = PRG
+        RES_STATE = RES_STATE and(M_BLK_CNT[SEL] <= MAX_PRG_CNT)
       wend
-      reload_node_s(SW[W_HEAD_BLK],NIL)
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
       //end-----------------------------------------------------------------
-      TRACE("begin: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-      TRACE("count %d",SW[W_BLK_CNT])
+      TRACE("begin: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      TRACE("count %d",M_BLK_CNT[SEL])
       //check result
       if(BLK_CNT <> (ii + ii*(COM_BLK_CNT+ij))or not RES_STATE) then
         TRACE("Failed - #1 load test, breaking...")
@@ -1017,48 +1019,48 @@ macro_command main()
     if(true and RES_STATE) then
       test_count = test_count +1
       TRACE("#2 insert combo test")
-      ii = SW[W_BLK_CNT] +2
+      ii = M_BLK_CNT[SEL] +2
       ij = 1 //insert position
       //begin---------------------------------------------------------------
    //@@@@      
-      switch_type(TYP_PRG)
-      reload_node_s(SW[W_HEAD_BLK],NIL)
-      if(ij >= 0 and ij <= SW[W_BLK_CNT]) then
+      SEL = PRG
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      if(ij >= 0 and ij <= M_BLK_CNT[SEL]) then
         advance_s(DIR_RIGHT*ij)
         new_block_s()
         set_block_s(RES_BLK)
 //        create_rp_s(RP_NEW_PRG,RES_BLK,NIL) //create restore point
         update_retain_s()
-        TRACE("   !!! before    prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("   !!! before    prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         insert_node_s(RES_BLK)
-        TRACE("   !!! insertion prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("   !!! insertion prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         //to stps
         load_stp_from_prg_s()
-        switch_type(TYP_STP)
-        SW[W_HEAD_BLK] = NIL
-        SetData(SW[W_HEAD_BLK],"Local HMI",RW,SD[D_HEAD_LOC],1)
-        while(RES_STATE and SW[W_BLK_CNT] < (COM_BLK_CNT +1))
+        SEL = STP
+        M_HEAD_BLK[SEL] = NIL
+        SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL],1)
+        while(RES_STATE and M_BLK_CNT[SEL] < (COM_BLK_CNT +1))
           new_block_s()
           set_block_s(RES_BLK)
-          TRACE("      before    stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+          TRACE("      before    stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
           insert_node_s(RES_BLK)
-          TRACE("      insertion stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+          TRACE("      insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         wend
         //записать add com
 //        remove_rp_s() //delete restore point
       end if
       //back to prgs
    //@@@@
-      switch_type(TYP_PRG)
-      TRACE("   !!! back to prg: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-      TRACE("count %d",SW[W_BLK_CNT])
-      //load_stp_from_prg_s() //портит малину обнулением SW[W_BLK_CNT])
+      SEL = PRG
+      TRACE("   !!! back to prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      TRACE("count %d",M_BLK_CNT[SEL])
+      //load_stp_from_prg_s() //портит малину обнулением W_BLK_CNT])
       //т.е при переключении программы шаги надо заново загрузить
-      switch_type(TYP_STP)
-      reload_node_s(SW[W_HEAD_BLK],NIL)
-      TRACE("   @@@ back to stp: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
-      TRACE("count %d",SW[W_BLK_CNT])      
-      if(ij >= 0 and (ij + COM_BLK_CNT) <= SW[W_BLK_CNT]) then
+      SEL = STP
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      TRACE("   @@@ back to stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      TRACE("count %d",M_BLK_CNT[SEL])      
+      if(ij >= 0 and (ij + COM_BLK_CNT) <= M_BLK_CNT[SEL]) then
         advance_s(DIR_RIGHT*(ij+COM_BLK_CNT))
         new_block_s()
         set_block_s(RES_BLK)
@@ -1073,19 +1075,19 @@ macro_command main()
   TRACE("RESTORE = %d",RESTORE)
   create_rp_s(RP_NEW_STP|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
         update_retain_s()
-        TRACE("   @@@ before at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("   @@@ before at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
         insert_node_s(RES_BLK)
   //advance_s(-5) //test
-        TRACE("   @@@ insertion at: [%d] : [%d,%d]",SW[W_CUR_BLK],SW[W_PRV_BLK],SW[W_NXT_BLK])
+        TRACE("   @@@ insertion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
   //load_store_data_s('S',RP_DAT_OFST,269)
         load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
 //        remove_rp_s() //delete restore point
       end if
       //end-----------------------------------------------------------------
-      TRACE("stp count %d",SW[W_BLK_CNT])
-      switch_type(TYP_PRG)
+      TRACE("stp count %d",M_BLK_CNT[SEL])
+      SEL = PRG
    //@@@@
-      if(not RES_STATE) then //SW[W_BLK_CNT] <> ii or
+      if(not RES_STATE) then //W_BLK_CNT] <> ii or
         TRACE("Failed - #2 insert test, breaking...")
       else
         passed_count = passed_count +1
