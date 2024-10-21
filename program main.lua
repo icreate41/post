@@ -472,17 +472,15 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short block[6],position[6]
-short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
+short position[6]
+short pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 short cmd_advance = 1,cmd_insert = 10,cmd_erase = 15,cmd_view = 62
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,cmd = 0,opt = 0
-int tr_update
 short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
-  FILL(block[0],NIL,6)
   FILL(position[0],0,6)
   FILL(cmd_tbl [0],0,64)
   set_dependency(cmd_advance +ps_stp,cmd_advance +ps_prg)
@@ -577,14 +575,14 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
   end if
 end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-if(not RES_STATE) then
-  TRACE("FAILURE")
-  return
-end if
 GetData(cmd,"Local HMI",LW,0,1)
 GetData(opt,"Local HMI",LW,2,1)
 p = 0
 SetData(p,"Local HMI",LW,0,1)
+if(not RES_STATE) then
+  TRACE("FAILURE")
+  return
+end if
 to_stack(cmd_view +STP,0)
 to_stack(cmd_view +PRG,0)
 if(cmd >= 1 and cmd <= 63) then
@@ -595,7 +593,7 @@ while(st_top > 0)     //todo: check run state
   st_top = st_top -1
   cmd = st_cmd[st_top]
   opt = st_opt[st_top]
-  if(cmd >= (cmd_advance +ps_prg) and cmd <= (cmd_advance +pw_prg)) then //advance prg
+  if(cmd >= (cmd_advance +pw_prg) and cmd <= (cmd_advance +ps_prg)) then //advance prg
     p = cmd -cmd_advance
     TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
     TRACE("p: [%d], opt :[%d]",p,opt)
@@ -604,21 +602,20 @@ while(st_top > 0)     //todo: check run state
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
-    tr_update = trig_change_w(tr_update,position[p])
     TRACE("want: [%d]",position[p] +opt)
+    k = position[p]
     position[p] = LIM(position[p] +opt,0,M_BLK_CNT[SEL] -1)
     TRACE("GET: [%d]",position[p])
-    tr_update = trig_change_w(tr_update,position[p])
     advance_s(position[p])
     TRACE("prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    if((p == ps_prg)and trig_edge_w(tr_update)) then
+    if(p == ps_prg and k <> position[p]) then
       SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
       position[ps_stp] = 0 //todo: load from this from com
       position[pw_stp] = 0
       TRACE("   update")
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  else if(cmd >= (cmd_advance +ps_stp) and cmd <= (cmd_advance +pr_stp)) then //advance stp
+  else if(cmd >= (cmd_advance +pw_stp) and cmd <= (cmd_advance +pr_stp)) then //advance stp
     p = cmd -cmd_advance
     load_stp_from_prg_s() //to stps
     SEL = STP
