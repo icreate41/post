@@ -472,7 +472,7 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[6]
+short block[6],position[6]
 short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
 short cmd_advance = 1,cmd_insert = 10,cmd_erase = 15,cmd_view = 62
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -482,6 +482,7 @@ short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
+  FILL(block[0],NIL,6)
   FILL(position[0],0,6)
   FILL(cmd_tbl [0],0,64)
   set_dependency(cmd_advance +ps_stp,cmd_advance +ps_prg)
@@ -665,6 +666,9 @@ while(st_top > 0)     //todo: check run state
       SEL = PRG
       remove_rp_s() //delete restore point
       TRACE("!!!INSERTION DONE!!!")
+      for k = ps_prg to pr_prg
+        position[k] = position[k] +(opt <= position[k])
+      next
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(cmd == (cmd_insert +STP)) then //insert stp
@@ -684,6 +688,9 @@ while(st_top > 0)     //todo: check run state
       TRACE("   insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       remove_rp_s() //delete restore point
       TRACE("!!!INSERTION DONE!!!")
+      for k = ps_stp to pr_stp
+        position[k] = position[k] +(opt <= position[k])
+      next
     end if
   //-------------------------------------------------------------
   else if(cmd == (cmd_erase +PRG)) then //erase prg
@@ -714,6 +721,9 @@ while(st_top > 0)     //todo: check run state
       remove_rp_s() //delete restore point
       TRACE("!!!ERASE DONE!!!")
       TRACE("blk cnt: [%d]",BLK_CNT)
+      for k = ps_prg to pr_prg
+        position[k] = position[k] -(opt < position[k])
+      next
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(cmd == (cmd_erase +STP)) then //erase stp
@@ -733,6 +743,9 @@ while(st_top > 0)     //todo: check run state
       remove_rp_s() //delete restore point
       TRACE("!!!ERASE DONE!!!")
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
+      for k = ps_stp to pr_stp
+        position[k] = position[k] -(opt < position[k])
+      next
     end if
   //-------------------------------------------------------------
   else if(cmd == (cmd_view +PRG)) then //view prg
@@ -757,5 +770,6 @@ while(st_top > 0)     //todo: check run state
   end if
 wend
 TRACE("OK = %d",RES_STATE)
+SetData(position[0],"Local HMI",LW,1000,6)
 //-------------------------------------------------------------
 end macro_command
