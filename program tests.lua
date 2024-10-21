@@ -1,20 +1,14 @@
 //-------------------------------------------------------------
-//итог - чинить сохранение и чтение количества шагов
-//нужна кс для ...
-//switch type это пиздец
-//загрузка последней программы как текущей
-//load_node_s - проверка кол ва шагов
-//замени type на проверку base[p] == p
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
 int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,COM_ADD_SZ = 10,COM_REQ_SZ = 16
-int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 300,RP_DAT_OFST=32
-int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR
+int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 288,RP_DAT_OFST=32
+int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR,PRG_SEL_LOC
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
-short BUFF[300],NIL = -1
+short BUFF[289],NIL = -1
 short RP_SAV_DAT = 1,RP_NEW_STP = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 16,RESTORE = 0
 //todo
 //подумай на счёт того, чтобы добавить owner и modified флаг
@@ -24,15 +18,17 @@ int  M_HEAD_LOC[2]
 short M_BLK_CNT[2],M_HEAD_BLK[2],M_CUR_BLK[2],M_PRV_BLK[2],M_NXT_BLK[2]
 short SEL=0,PRG=0,STP=1,LOC_OFST_HEAD=0,LOC_OFST_CNT=1
 short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
+//-------------------------------------------------------------
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
 bool  RES_STATE
+char  cmd_tbl[64]
+short st_cmd[16],st_opt[16],st_top = 0
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
   BLK_PLD_SZ  = STP_ADD_SZ + STP_REQ_SZ
-  //BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ   -3)*(BLK_PLD_SZ <   3)
   BLK_PLD_SZ  = BLK_PLD_SZ -(BLK_PLD_SZ -128)*(BLK_PLD_SZ > 128)
   STP_REQ_SZ  = BLK_PLD_SZ - STP_ADD_SZ
   BLK_SZ      = BLK_HDR_SZ +BLK_PLD_SZ
@@ -49,6 +45,7 @@ sub init_values()
   COM_REP = 0
   M_HEAD_LOC[PRG] = CFG_OFST +32 //тут два шорта, 1 - голова, 2 - количество блоков
   M_HEAD_LOC[STP] = CFG_OFST +34 //тут
+  PRG_SEL_LOC     = CFG_OFST +36
   FILL(M_BLK_CNT [0],0,2) //стоит удалить и оставить только NIL, подгрузку сделать как load_head
   FILL(M_HEAD_BLK[0],NIL,2)
   FILL(M_CUR_BLK [0],NIL,2)
@@ -66,6 +63,37 @@ sub load_stp_from_prg_s() //load_head_s()
     M_NXT_BLK [STP] = NIL
     GetData(M_HEAD_BLK[STP],"Local HMI",RW,M_HEAD_LOC[STP]+LOC_OFST_HEAD,1) 
   end if  
+end sub
+//-------------------------------------------------------------
+sub load_config_s()
+  int tmp_int
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +0,1)
+  SetData(HEADER      ,"Local HMI",RW,CFG_OFST +0,1)
+  RES_STATE = RES_STATE and(HEADER       == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +2,1)
+  SetData(VERSION     ,"Local HMI",RW,CFG_OFST +2,1)
+  RES_STATE = RES_STATE and(VERSION      == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +4,1)
+  SetData(DATA_TYPE   ,"Local HMI",RW,CFG_OFST +4,1)
+  RES_STATE = RES_STATE and(DATA_TYPE    == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +6,1)
+  SetData(STP_REQ_SZ  ,"Local HMI",RW,CFG_OFST +6,1)
+  RES_STATE = RES_STATE and(STP_REQ_SZ   == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +8,1)
+  SetData(MAX_DAT_SZ  ,"Local HMI",RW,CFG_OFST +8,1)
+  RES_STATE = RES_STATE and(MAX_DAT_SZ   >= tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+10,1)
+  SetData(DAT_OFST    ,"Local HMI",RW,CFG_OFST+10,1)
+  RES_STATE = RES_STATE and(DAT_OFST     == tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+12,1)
+  SetData(MAX_PRG_CNT ,"Local HMI",RW,CFG_OFST+12,1)
+  RES_STATE = RES_STATE and(MAX_PRG_CNT  >= tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+14,1)
+  SetData(MAX_STP_CNT ,"Local HMI",RW,CFG_OFST+14,1)
+  RES_STATE = RES_STATE and(MAX_STP_CNT  >= tmp_int)
+  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+16,1)
+  SetData(COM_REQ_SZ  ,"Local HMI",RW,CFG_OFST+16,1)
+  RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
 end sub
 //-------------------------------------------------------------
 //sub get_prg_com_from_cur_s()
@@ -177,7 +205,7 @@ sub update_retain_s()
     SetData(i,"Local HMI",LB,9029,1)
     //for i = 0 to 999
     //next
-    DELAY(50)
+    //DELAY(50) //todo: restore delay
 	i = 0
 	SetData(i,"Local HMI",LB,9029,1)
   end if
@@ -212,37 +240,6 @@ sub load_store_data_s(int op, int ofst, int req)
     prv = blk
     blk = nxt
   wend
-end sub
-//-------------------------------------------------------------
-sub load_config_s()
-  int tmp_int
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +0,1)
-  SetData(HEADER      ,"Local HMI",RW,CFG_OFST +0,1)
-  RES_STATE = RES_STATE and(HEADER       == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +2,1)
-  SetData(VERSION     ,"Local HMI",RW,CFG_OFST +2,1)
-  RES_STATE = RES_STATE and(VERSION      == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +4,1)
-  SetData(DATA_TYPE   ,"Local HMI",RW,CFG_OFST +4,1)
-  RES_STATE = RES_STATE and(DATA_TYPE    == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +6,1)
-  SetData(STP_REQ_SZ  ,"Local HMI",RW,CFG_OFST +6,1)
-  RES_STATE = RES_STATE and(STP_REQ_SZ   == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST +8,1)
-  SetData(MAX_DAT_SZ  ,"Local HMI",RW,CFG_OFST +8,1)
-  RES_STATE = RES_STATE and(MAX_DAT_SZ   >= tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+10,1)
-  SetData(DAT_OFST    ,"Local HMI",RW,CFG_OFST+10,1)
-  RES_STATE = RES_STATE and(DAT_OFST     == tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+12,1)
-  SetData(MAX_PRG_CNT ,"Local HMI",RW,CFG_OFST+12,1)
-  RES_STATE = RES_STATE and(MAX_PRG_CNT  >= tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+14,1)
-  SetData(MAX_STP_CNT ,"Local HMI",RW,CFG_OFST+14,1)
-  RES_STATE = RES_STATE and(MAX_STP_CNT  >= tmp_int)
-  GetData(tmp_int     ,"Local HMI",RW,CFG_OFST+16,1)
-  SetData(COM_REQ_SZ  ,"Local HMI",RW,CFG_OFST+16,1)
-  RES_STATE = RES_STATE and(COM_REQ_SZ   == tmp_int)
 end sub
 //-------------------------------------------------------------
 sub reload_node_s(short blk, short prev_blk)

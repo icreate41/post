@@ -1,18 +1,14 @@
 //-------------------------------------------------------------
-//нужна кс для ...
-//загрузка последней программы как текущей
-//load_node_s - проверка кол ва шагов
-//замени type на проверку base[p] == p
 //APPLICATION DEFINED
 int HEADER = 0x66FFC0DE,VERSION = 0x1
 //CONFIG
 int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,COM_ADD_SZ = 10,COM_REQ_SZ = 16
-int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 300,RP_DAT_OFST=32
+int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 288,RP_DAT_OFST=32
 int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR,PRG_SEL_LOC
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
-short BUFF[300],NIL = -1
+short BUFF[289],NIL = -1
 short RP_SAV_DAT = 1,RP_NEW_STP = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 16,RESTORE = 0
 //todo
 //подумай на счёт того, чтобы добавить owner и modified флаг
@@ -22,10 +18,13 @@ int  M_HEAD_LOC[2]
 short M_BLK_CNT[2],M_HEAD_BLK[2],M_CUR_BLK[2],M_PRV_BLK[2],M_NXT_BLK[2]
 short SEL=0,PRG=0,STP=1,LOC_OFST_HEAD=0,LOC_OFST_CNT=1
 short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
+//-------------------------------------------------------------
 //COMMON
 int   COM_TIM
 short COM_POS,COM_REP
 bool  RES_STATE
+char  cmd_tbl[64]
+short st_cmd[16],st_opt[16],st_top = 0
 //-------------------------------------------------------------
 sub init_values()
   RES_STATE = 1
@@ -453,36 +452,47 @@ sub new_block_s()
   RES_BLK = res
 end sub
 //-------------------------------------------------------------
+sub to_stack(int cmd, int opt)
+  st_cmd[st_top] = cmd
+  st_opt[st_top] = opt
+  st_top = st_top +1
+  while(cmd_tbl[cmd])
+    st_cmd[st_top] = cmd_tbl[cmd]
+    st_opt[st_top] = 0
+    cmd = cmd_tbl[cmd]
+    st_top = st_top +1
+  wend
+end sub
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+sub set_dependency(int cmd, int req)
+  cmd_tbl[cmd] = req
+end sub
+//-------------------------------------------------------------
 //-------------------------------------------------------------
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[6],base[6],type[6]
+short position[6]
 short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//testing stack
-int st_cmd[10],st_opt[10],st_pos = 1, st_cnt = 1,pre_cmd_done = 0
-int cmd_advance = 10,cmd_insert = 20,cmd_erase = 30, cmd_view = 1000
+short cmd_advance = 1,cmd_insert = 10,cmd_erase = 15,cmd_view = 62
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,cmd = 0,opt = 0
-int tr_update,tr_st_before
+int tr_update
 short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
   FILL(position[0],0,6)
-  base[ps_stp] = ps_prg
-  type[ps_stp] = STP
-  base[pw_stp] = ps_prg
-  type[pw_stp] = STP
-  base[pr_stp] = pr_prg
-  type[pr_stp] = STP
-  base[ps_prg] = ps_prg
-  type[ps_prg] = PRG
-  base[pw_prg] = pw_prg
-  type[pw_prg] = PRG
-  base[pr_prg] = pr_prg
-  type[pr_prg] = PRG
+  FILL(cmd_tbl [0],0,64)
+  set_dependency(cmd_advance +ps_stp,cmd_advance +ps_prg)
+  set_dependency(cmd_advance +pw_stp,cmd_advance +ps_prg)
+  set_dependency(cmd_advance +pr_stp,cmd_advance +pr_prg)
+  set_dependency(cmd_insert  +PRG   ,cmd_advance +pw_prg)
+  set_dependency(cmd_insert  +STP   ,cmd_advance +pw_stp)
+  set_dependency(cmd_erase   +PRG   ,cmd_advance +pw_prg)
+  set_dependency(cmd_erase   +STP   ,cmd_advance +pw_stp)
+  set_dependency(cmd_view    +PRG   ,cmd_advance +pw_prg)
+  set_dependency(cmd_view    +STP   ,cmd_advance +pw_stp)
   run = 0
   //
   init_values()
@@ -574,23 +584,18 @@ GetData(cmd,"Local HMI",LW,0,1)
 GetData(opt,"Local HMI",LW,2,1)
 p = 0
 SetData(p,"Local HMI",LW,0,1)
-if(cmd) then
-  st_cmd[st_cnt] = cmd
-  st_opt[st_cnt] = opt
-  st_cnt = st_cnt +1
+to_stack(cmd_view +STP,0)
+to_stack(cmd_view +PRG,0)
+if(cmd >= 1 and cmd <= 63) then
+  to_stack(cmd,opt)
 end if
-st_cmd[st_cnt] = cmd_view + PRG
-st_cnt = st_cnt +1
-st_cmd[st_cnt] = cmd_view + STP
-st_cnt = st_cnt +1
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-tr_st_before = trig_change_w(tr_st_before,0)
-while(st_pos < st_cnt)     //todo: check run state 
-  tr_st_before = trig_change_w(tr_st_before,st_pos)
-  cmd = st_cmd[st_pos]
-  opt = st_opt[st_pos]
-  p = var_range(cmd,10,5)
-  if(p >= 0) then //advance_s
+while(st_top > 0)     //todo: check run state
+  st_top = st_top -1
+  cmd = st_cmd[st_top]
+  opt = st_opt[st_top]
+  if(cmd >= (cmd_advance +ps_prg) and cmd <= (cmd_advance +pw_prg)) then //advance prg
+    p = cmd -cmd_advance
     TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
     TRACE("p: [%d], opt :[%d]",p,opt)
     SEL = PRG //to prg
@@ -598,13 +603,12 @@ while(st_pos < st_cnt)     //todo: check run state
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
-    k = base[p] //base
-    tr_update = trig_change_w(tr_update,position[k])
-    TRACE("want: [%d]",position[k] +opt*(type[p] == PRG))
-    position[k] = LIM(position[k] +opt*(type[p] == PRG),0,M_BLK_CNT[SEL] -1)
-    TRACE("GET: [%d]",position[k])
-    tr_update = trig_change_w(tr_update,position[k])
-    advance_s(position[k])
+    tr_update = trig_change_w(tr_update,position[p])
+    TRACE("want: [%d]",position[p] +opt)
+    position[p] = LIM(position[p] +opt,0,M_BLK_CNT[SEL] -1)
+    TRACE("GET: [%d]",position[p])
+    tr_update = trig_change_w(tr_update,position[p])
+    advance_s(position[p])
     TRACE("prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     if((p == ps_prg)and trig_edge_w(tr_update)) then
       SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
@@ -612,173 +616,126 @@ while(st_pos < st_cnt)     //todo: check run state
       position[pw_stp] = 0
       TRACE("   update")
     end if
-    if(type[p] == STP) then
-      load_stp_from_prg_s() //to stps
-      SEL = STP
-      GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
-      reload_node_s(M_HEAD_BLK[SEL],NIL)
-      TRACE("stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-      TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
-      TRACE("want: [%d]",position[p]+opt)
-      position[p] = LIM(position[p]+opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
-      TRACE("GET: [%d]",position[p])
-      advance_s(COM_BLK_CNT+position[p])
-      TRACE("stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    end if
-  end if
-  //-------------------------------------------------------------
-  p = var_range(cmd,cmd_insert+PRG,1)
-  if(p >= 0) then //insert prg
-    if not(pre_cmd_done) then
-      st_pos = st_pos + DIR_LEFT
-      st_cmd[st_pos] = cmd_advance + pw_prg
-      st_opt[st_pos] = 0
-      continue
-    end if
-    SEL = PRG //to prg
-    if not((M_BLK_CNT[SEL] < MAX_PRG_CNT)and((BLK_CNT +COM_BLK_CNT +1) < MAX_BLK_CNT)) then
-      st_pos = st_pos + DIR_RIGHT
-      continue
-    end if
-    TRACE("!!!INSERTION PRG!!!")
-    opt = LIM(position[pw_prg] +opt,0,M_BLK_CNT[SEL]) //allow shift to the end()
-    advance_s(opt -position[pw_prg])
-    new_block_s()
-    set_block_s(RES_BLK)
-    create_rp_s(RP_NEW_PRG,RES_BLK,NIL) //create restore point
-    update_retain_s()
-    TRACE("   before prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    insert_node_s(RES_BLK)
-    TRACE("   insertion prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    load_stp_from_prg_s() //to stps
-    SEL = STP
-    M_HEAD_BLK[SEL] = NIL
-    GetData(BUFF[0],"Local HMI",LW,def_stp_src,BLK_PLD_SZ) //check this line pos
-    while(RES_STATE and M_BLK_CNT[SEL] < (COM_BLK_CNT +1))
-      new_block_s()
-      set_block_s(RES_BLK)
-      TRACE("      before    stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-      insert_node_s(RES_BLK)
-      TRACE("      insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-      load_store_data_s('S',0,BLK_PLD_SZ)
-    wend
-    reload_node_s(M_HEAD_BLK[SEL],NIL)
-    FILL(BUFF[0],0,COM_ADD_SZ)
-    load_store_data_s('S',0,COM_ADD_SZ)
-    advance_s(COM_BLK_OFST)
-    GetData(BUFF[0],"Local HMI",LW,def_com_src,COM_REQ_SZ)
-    load_store_data_s('S',0,COM_REQ_SZ)
-    SEL = PRG
-    remove_rp_s() //delete restore point
-    TRACE("!!!INSERTION DONE!!!")
-  end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  p = var_range(cmd,cmd_insert+STP,1)
-  if(p >= 0) then //insert stp
-    if not(pre_cmd_done) then
-      st_pos = st_pos + DIR_LEFT
-      st_cmd[st_pos] = cmd_advance + pw_stp
-      st_opt[st_pos] = 0
-      continue
-    end if
-    SEL = STP //to stps
-    if not((M_BLK_CNT[SEL] < (MAX_STP_CNT+COM_BLK_CNT))and(BLK_CNT < MAX_BLK_CNT)) then
-      st_pos = st_pos + DIR_RIGHT
-      continue
-    end if
-    TRACE("!!!INSERTION STP!!!")
-    opt = LIM(position[pw_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT) //allow shift to the end()
-    advance_s(opt -position[pw_stp])
-    new_block_s()
-    set_block_s(RES_BLK)
-    GetData(BUFF[RP_DAT_OFST],"Local HMI",LW,def_stp_src,BLK_PLD_SZ)
-    create_rp_s(RP_NEW_STP|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
-    update_retain_s()
-    TRACE("   before    stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    insert_node_s(RES_BLK)
-    load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
-    TRACE("   insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    remove_rp_s() //delete restore point
-    TRACE("!!!INSERTION DONE!!!")
-  end if
-  //-------------------------------------------------------------
-  p = var_range(cmd,cmd_erase+PRG,1)
-  if(p >= 0) then //erase prg
-    if not(pre_cmd_done) then
-      st_pos = st_pos + DIR_LEFT
-      st_cmd[st_pos] = cmd_advance + pw_prg
-      st_opt[st_pos] = 0
-      continue
-    end if
-    SEL = PRG //to prg
-    if not(M_BLK_CNT[SEL] > 1) then
-      st_pos = st_pos + DIR_RIGHT
-      continue
-    end if
-    //todo: run check
-    TRACE("!!!ERASE PRG!!!")
-    TRACE("blk cnt: [%d]",BLK_CNT)
-    opt = LIM(position[pw_prg] +opt,0,M_BLK_CNT[SEL] -1)
-    advance_s(opt -position[pw_prg])
-    create_rp_s(RP_DEL_BLK,NIL,NIL) //create restore point
-    update_retain_s()
+  else if(cmd >= (cmd_advance +ps_stp) and cmd <= (cmd_advance +pr_stp)) then //advance stp
+    p = cmd -cmd_advance
     load_stp_from_prg_s() //to stps
     SEL = STP
     GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
+    reload_node_s(M_HEAD_BLK[SEL],NIL)
+    TRACE("stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
-    M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
-    while(RES_STATE and M_NXT_BLK[SEL] > NIL)
-      reload_node_s(M_NXT_BLK[SEL],M_CUR_BLK[SEL])
-      TRACE("   stp deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-      del_block_s(M_CUR_BLK[SEL])
-    wend
-    SEL = PRG //to prg
-    TRACE("prg deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    erase_node_s()
-    TRACE("prg after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    del_block_s(RES_BLK)
-    remove_rp_s() //delete restore point
-    TRACE("!!!ERASE DONE!!!")
-    TRACE("blk cnt: [%d]",BLK_CNT)
-  end if
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  p = var_range(cmd,cmd_erase+STP,1)
-  if(p >= 0) then //erase stp
-    if not(pre_cmd_done) then
-      st_pos = st_pos + DIR_LEFT
-      st_cmd[st_pos] = cmd_advance + pw_stp
-      st_opt[st_pos] = 0
-      continue
-    end if
-    SEL = STP //to stps
-    if not(M_BLK_CNT[SEL] > (COM_BLK_CNT +1)) then
-      st_pos = st_pos + DIR_RIGHT
-      continue
-    end if
-    //todo: run check
-    TRACE("!!!ERASE STP!!!")
-    TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
-    opt = LIM(position[pw_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
-    advance_s(opt -position[pw_stp])
-    create_rp_s(RP_DEL_BLK,NIL,NIL) //create restore point
-    update_retain_s()
-    TRACE("stp deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    erase_node_s()
-    TRACE("stp after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    del_block_s(RES_BLK)
-    remove_rp_s() //delete restore point
-    TRACE("!!!ERASE DONE!!!")
-    TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
-  end if
+    TRACE("want: [%d]",position[p]+opt)
+    position[p] = LIM(position[p]+opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+    TRACE("GET: [%d]",position[p])
+    advance_s(COM_BLK_CNT+position[p])
+    TRACE("stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
   //-------------------------------------------------------------
-  p = var_range(cmd,cmd_view+PRG,1)
-  if(p >= 0) then //view prg
-    if not(pre_cmd_done) then
-      st_pos = st_pos + DIR_LEFT
-      st_cmd[st_pos] = cmd_advance + pw_prg
-      st_opt[st_pos] = 0
-      continue
+  else if(cmd == (cmd_insert +PRG)) then //insert prg
+    SEL = PRG //to prg
+    if((M_BLK_CNT[SEL] < MAX_PRG_CNT)and((BLK_CNT +COM_BLK_CNT +1) < MAX_BLK_CNT)) then
+      TRACE("!!!INSERTION PRG!!!")
+      opt = LIM(position[pw_prg] +opt,0,M_BLK_CNT[SEL]) //allow shift to the end()
+      advance_s(opt -position[pw_prg])
+      new_block_s()
+      set_block_s(RES_BLK)
+      create_rp_s(RP_NEW_PRG,RES_BLK,NIL) //create restore point
+      update_retain_s()
+      TRACE("   before prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      insert_node_s(RES_BLK)
+      TRACE("   insertion prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      load_stp_from_prg_s() //to stps
+      SEL = STP
+      M_HEAD_BLK[SEL] = NIL
+      GetData(BUFF[0],"Local HMI",LW,def_stp_src,BLK_PLD_SZ) //check this line pos
+      while(RES_STATE and M_BLK_CNT[SEL] < (COM_BLK_CNT +1))
+        new_block_s()
+        set_block_s(RES_BLK)
+        TRACE("      before    stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+        insert_node_s(RES_BLK)
+        TRACE("      insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+        load_store_data_s('S',0,BLK_PLD_SZ)
+      wend
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      FILL(BUFF[0],0,COM_ADD_SZ)
+      load_store_data_s('S',0,COM_ADD_SZ)
+      advance_s(COM_BLK_OFST)
+      GetData(BUFF[0],"Local HMI",LW,def_com_src,COM_REQ_SZ)
+      load_store_data_s('S',0,COM_REQ_SZ)
+      SEL = PRG
+      remove_rp_s() //delete restore point
+      TRACE("!!!INSERTION DONE!!!")
     end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  else if(cmd == (cmd_insert +STP)) then //insert stp
+    SEL = STP //to stps
+    if((M_BLK_CNT[SEL] < (MAX_STP_CNT+COM_BLK_CNT))and(BLK_CNT < MAX_BLK_CNT)) then
+      TRACE("!!!INSERTION STP!!!")
+      opt = LIM(position[pw_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT) //allow shift to the end()
+      advance_s(opt -position[pw_stp])
+      new_block_s()
+      set_block_s(RES_BLK)
+      GetData(BUFF[RP_DAT_OFST],"Local HMI",LW,def_stp_src,BLK_PLD_SZ)
+      create_rp_s(RP_NEW_STP|RP_SAV_DAT,RES_BLK,BLK_PLD_SZ) //create restore point
+      update_retain_s()
+      TRACE("   before    stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      insert_node_s(RES_BLK)
+      load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
+      TRACE("   insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      remove_rp_s() //delete restore point
+      TRACE("!!!INSERTION DONE!!!")
+    end if
+  //-------------------------------------------------------------
+  else if(cmd == (cmd_erase +PRG)) then //erase prg
+    SEL = PRG //to prg
+    if(M_BLK_CNT[SEL] > 1) then
+      //todo: run check
+      TRACE("!!!ERASE PRG!!!")
+      TRACE("blk cnt: [%d]",BLK_CNT)
+      opt = LIM(position[pw_prg] +opt,0,M_BLK_CNT[SEL] -1)
+      advance_s(opt -position[pw_prg])
+      create_rp_s(RP_DEL_BLK,NIL,NIL) //create restore point
+      update_retain_s()
+      load_stp_from_prg_s() //to stps
+      SEL = STP
+      GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
+      TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
+      M_NXT_BLK[SEL] = M_HEAD_BLK[SEL]
+      while(RES_STATE and M_NXT_BLK[SEL] > NIL)
+        reload_node_s(M_NXT_BLK[SEL],M_CUR_BLK[SEL])
+        TRACE("   stp deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+        del_block_s(M_CUR_BLK[SEL])
+      wend
+      SEL = PRG //to prg
+      TRACE("prg deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      erase_node_s()
+      TRACE("prg after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      del_block_s(RES_BLK)
+      remove_rp_s() //delete restore point
+      TRACE("!!!ERASE DONE!!!")
+      TRACE("blk cnt: [%d]",BLK_CNT)
+    end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  else if(cmd == (cmd_erase +STP)) then //erase stp
+    SEL = STP //to stps
+    if(M_BLK_CNT[SEL] > (COM_BLK_CNT +1)) then
+      //todo: run check
+      TRACE("!!!ERASE STP!!!")
+      TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
+      opt = LIM(position[pw_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+      advance_s(opt -position[pw_stp])
+      create_rp_s(RP_DEL_BLK,NIL,NIL) //create restore point
+      update_retain_s()
+      TRACE("stp deletion at: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      erase_node_s()
+      TRACE("stp after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      del_block_s(RES_BLK)
+      remove_rp_s() //delete restore point
+      TRACE("!!!ERASE DONE!!!")
+      TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
+    end if
+  //-------------------------------------------------------------
+  else if(cmd == (cmd_view +PRG)) then //view prg
     p = 0
     TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
     SEL = PRG
@@ -787,16 +744,8 @@ while(st_pos < st_cnt)     //todo: check run state
       advance_s(DIR_RIGHT)
       p = p +1
     wend
-  end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  p = var_range(cmd,cmd_view+STP,1)
-  if(p >= 0) then //view stp
-    if not(pre_cmd_done) then
-      st_pos = st_pos + DIR_LEFT
-      st_cmd[st_pos] = cmd_advance + pw_stp
-      st_opt[st_pos] = 0
-      continue
-    end if
+  else if(cmd == (cmd_view +STP)) then //view stp
     p = 0
     TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
     SEL = STP
@@ -806,9 +755,6 @@ while(st_pos < st_cnt)     //todo: check run state
       p = p +1
     wend
   end if
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  pre_cmd_done = trig_edge_w(tr_st_before) < 0
-  st_pos = st_pos +1
 wend
 TRACE("OK = %d",RES_STATE)
 //-------------------------------------------------------------
