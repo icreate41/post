@@ -472,17 +472,17 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short block[6],position[6]
+short cblock[6],pblock[6],position[6]
 short ps_stp=0,pw_stp=1,pr_stp=2,ps_prg=3,pw_prg=4,pr_prg=5
 short cmd_advance = 1,cmd_insert = 10,cmd_erase = 15,cmd_view = 62
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,cmd = 0,opt = 0
-int tr_update
 short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
-  FILL(block[0],NIL,6)
+  FILL(cblock[0],NIL,6)
+  FILL(pblock[0],NIL,6)
   FILL(position[0],0,6)
   FILL(cmd_tbl [0],0,64)
   set_dependency(cmd_advance +ps_stp,cmd_advance +ps_prg)
@@ -577,14 +577,14 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
   end if
 end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-if(not RES_STATE) then
-  TRACE("FAILURE")
-  return
-end if
 GetData(cmd,"Local HMI",LW,0,1)
 GetData(opt,"Local HMI",LW,2,1)
 p = 0
 SetData(p,"Local HMI",LW,0,1)
+if(not RES_STATE) then
+  TRACE("FAILURE")
+  return
+end if
 to_stack(cmd_view +STP,0)
 to_stack(cmd_view +PRG,0)
 if(cmd >= 1 and cmd <= 63) then
@@ -601,20 +601,28 @@ while(st_top > 0)     //todo: check run state
     TRACE("p: [%d], opt :[%d]",p,opt)
     SEL = PRG //to prg
     GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
-    reload_node_s(M_HEAD_BLK[SEL],NIL)
+    if(cblock[p] > NIL) then
+      reload_node_s(cblock[p],pblock[p])
+    else
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+    end if
     TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
-    tr_update = trig_change_w(tr_update,position[p])
+    k = position[p]
     TRACE("want: [%d]",position[p] +opt)
-    position[p] = LIM(position[p] +opt,0,M_BLK_CNT[SEL] -1)
-    TRACE("GET: [%d]",position[p])
-    tr_update = trig_change_w(tr_update,position[p])
-    advance_s(position[p])
+    opt = LIM(position[p] +opt,0,M_BLK_CNT[SEL] -1)
+    TRACE("GET: [%d]",opt)
+    advance_s(opt -position[p]*(cblock[p] > NIL))
+    position[p] = opt
+    cblock[p] = M_CUR_BLK[SEL]
+    pblock[p] = M_PRV_BLK[SEL]
     TRACE("prg: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    if((p == ps_prg)and trig_edge_w(tr_update)) then
+    if(p == ps_prg and k <> opt) then //todo: переменная и в цикле while проверять это условие
       SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
       position[ps_stp] = 0 //todo: load from this from com
       position[pw_stp] = 0
+      cblock[ps_stp] = NIL
+      cblock[pw_stp] = NIL
       TRACE("   update")
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -623,13 +631,20 @@ while(st_top > 0)     //todo: check run state
     load_stp_from_prg_s() //to stps
     SEL = STP
     GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
-    reload_node_s(M_HEAD_BLK[SEL],NIL)
+    if(cblock[p] > NIL) then
+      reload_node_s(cblock[p],pblock[p])
+    else
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+    end if
     TRACE("stp head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     TRACE("STP BLK CNT: [%d]",M_BLK_CNT[SEL])
     TRACE("want: [%d]",position[p]+opt)
-    position[p] = LIM(position[p]+opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
-    TRACE("GET: [%d]",position[p])
-    advance_s(COM_BLK_CNT+position[p])
+    opt = LIM(position[p]+opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+    TRACE("GET: [%d]",opt)
+    advance_s(opt-position[p]*(cblock[p] > NIL)+COM_BLK_CNT*(cblock[p] <= NIL))
+    position[p] = opt
+    cblock[p] = M_CUR_BLK[SEL]
+    pblock[p] = M_PRV_BLK[SEL]
     TRACE("stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
   //-------------------------------------------------------------
   else if(cmd == (cmd_insert +PRG)) then //insert prg
@@ -722,6 +737,16 @@ while(st_top > 0)     //todo: check run state
       TRACE("!!!ERASE DONE!!!")
       TRACE("blk cnt: [%d]",BLK_CNT)
       for k = ps_prg to pr_prg
+        reload_node_s(cblock[k],pblock[k])
+        if(opt == position[k]) then
+          advance_s(DIR_RIGHT)
+          if(opt == position[ps_prg]) then
+            position[ps_stp] = 0 //todo: load from this from com
+            position[pw_stp] = 0
+            cblock[ps_stp] = NIL
+            cblock[pw_stp] = NIL
+          end if
+        end if
         position[k] = position[k] -(opt < position[k])
       next
     end if
@@ -744,6 +769,10 @@ while(st_top > 0)     //todo: check run state
       TRACE("!!!ERASE DONE!!!")
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
       for k = ps_stp to pr_stp
+        reload_node_s(cblock[k],pblock[k])
+        if(opt == position[k]) then
+          advance_s(DIR_RIGHT)
+        end if
         position[k] = position[k] -(opt < position[k])
       next
     end if
