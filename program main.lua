@@ -472,15 +472,17 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[6]
+short cblock[6],pblock[6],position[6]
 short pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 short cmd_advance = 1,cmd_insert = 10,cmd_erase = 15,cmd_view = 62
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-int p,k,cmd = 0,opt = 0
+int p,k,l,m,n,cmd = 0,opt = 0
 short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
+  FILL(cblock[0],NIL,6)
+  FILL(pblock[0],NIL,6) 
   FILL(position[0],0,6)
   FILL(cmd_tbl [0],0,64)
   set_dependency(cmd_advance +ps_stp,cmd_advance +ps_prg)
@@ -593,6 +595,25 @@ while(st_top > 0)     //todo: check run state
   st_top = st_top -1
   cmd = st_cmd[st_top]
   opt = st_opt[st_top]
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  if(cmd >= cmd_advance and cmd <= (cmd_advance +ps_prg)) then
+    int rp,ud,np
+    rp = position[p] + opt
+    ud = opt
+    np = p
+    for k = (p/3)*3 to 2 + (p/3)*3
+      if(cblock[k] > NIL) then
+        if(abs_i(rp - position[k]) < abs_i(rp - position[n])) then
+          ud = rp - position[k]
+          np  = k
+        end if
+      end if
+    next
+    cblock[p] = cblock[np]
+    pblock[p] = pblock[np]
+    opt = ud    
+  end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   if(cmd >= (cmd_advance +pw_prg) and cmd <= (cmd_advance +ps_prg)) then //advance prg
     p = cmd -cmd_advance
     TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
