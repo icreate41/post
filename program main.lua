@@ -603,7 +603,7 @@ to_stack(ev_view +STP,0)
 to_stack(ev_view +PRG,0)
 to_stack(evt,opt)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-while(st_top > 0) //stack machine
+while(RES_STATE and st_top > 0) //stack machine
   st_top = st_top -1
   evt = st_evt[st_top]
   opt = st_opt[st_top]
