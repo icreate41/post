@@ -452,8 +452,15 @@ sub new_block_s()
   RES_BLK = res
 end sub
 //-------------------------------------------------------------
+sub to_stack_no_rec(int cmd, int opt)
+  if(cmd > 0 and cmd < 64) then
+    st_cmd[st_top] = cmd
+    st_opt[st_top] = opt
+    st_top = st_top +1
+  end if
+end sub
 sub to_stack(int cmd, int opt)
-  if(cmd >= 1 and cmd <= 63) then
+  if(cmd > 0 and cmd < 64) then
     st_cmd[st_top] = cmd
     st_opt[st_top] = opt
     st_top = st_top +1
@@ -474,11 +481,11 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[6]
+short position[6],pos_hdl[6]
 short pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 short cmd_set_pos = 1,cmd_get_pos = 11,cmd_insert = 20,cmd_erase = 25
+short cmd_set_prg = 50,cmd_rld_prg = 51,cmd_set_stp = 52,cmd_rld_sstp=53,cmd_rld_rstp=54
 short cmd_view = 62
-short link[2] = {-1,-1},
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,cmd = 0,opt = 0, cmd_pos
 short def_stp_src = 100,def_com_src = 200
@@ -486,7 +493,11 @@ bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
   FILL(position[0],0,6)
+  FILL(pos_hdl[0],0,6)
   FILL(cmd_tbl [0],0,64)
+  pos_hdl[ps_prg] = cmd_rld_prg
+  pos_hdl[ps_stp] = cmd_rld_sstp
+  pos_hdl[pr_stp] = cmd_rld_rstp
   set_dependency(cmd_get_pos +ps_stp,cmd_get_pos +ps_prg)
   set_dependency(cmd_get_pos +pw_stp,cmd_get_pos +ps_prg)
   set_dependency(cmd_get_pos +pr_stp,cmd_get_pos +pr_prg)  
@@ -499,6 +510,9 @@ if(INIT() == true) then
   set_dependency(cmd_erase   +STP   ,cmd_get_pos +pw_stp)
   set_dependency(cmd_view    +PRG   ,cmd_get_pos +pw_prg)
   set_dependency(cmd_view    +STP   ,cmd_get_pos +pw_stp)
+  set_dependency(cmd_rld_prg        ,cmd_get_pos +ps_prg)
+  set_dependency(cmd_rld_sstp       ,cmd_get_pos +ps_stp)
+  set_dependency(cmd_rld_rstp       ,cmd_get_pos +pr_stp)
   run = 0
   //
   init_values()
@@ -617,9 +631,15 @@ while(st_top > 0)     //todo: check run state
     TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     advance_s(COM_BLK_CNT*SEL +position[p])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
-    link[SEL] = p
+    if(position[ps_prg] == position[pr_prg]) then //надо упростить или вынести в обработчик
+      if     (p == ps_stp) then
+        position[pr_stp] = position[p]
+      else if(p == pr_stp) then
+        position[pr_stp] = position[p]
+      end if
+    end if
     if(cmd >= cmd_get_pos) then
-      //to_stack(set_pos_hdl[p],'L') //LOAD([x] ? [x])
+      to_stack_no_rec(pos_hdl[p],0)
     end if
   end if
   //-------------------------------------------------------------
@@ -659,6 +679,7 @@ while(st_top > 0)     //todo: check run state
       TRACE("!!!INSERTION DONE!!!")
       position[ps_prg] = position[ps_prg] +(opt <= position[ps_prg])
       position[pr_prg] = position[pr_prg] +(opt <= position[pr_prg])
+      to_stack_no_rec(cmd_set_prg,0)
       //if(run) SetData(position[pr_prg],"Local HMI",RW,PRG_SEL_LOC,1) //STORE(pr_prg)
       //else    SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1) //STORE(ps_prg)
     end if
@@ -682,6 +703,7 @@ while(st_top > 0)     //todo: check run state
       TRACE("!!!INSERTION DONE!!!")
       position[ps_stp] = position[ps_stp] +(opt <= position[ps_stp]) //[ps_prg][pw_stp]
       position[pr_stp] = position[pr_stp] +(opt <= position[pr_stp] and position[pr_prg] == position[ps_prg]) //[pr_prg][pw_stp]
+      to_stack_no_rec(cmd_set_stp,0)
       //save в [ps_prg] номер шага (ps_stp) //STORE(ps_prg->ps_stp)
     end if
   //-------------------------------------------------------------
@@ -717,6 +739,11 @@ while(st_top > 0)     //todo: check run state
       TRACE("blk cnt: [%d]",BLK_CNT)
       position[ps_prg] = position[ps_prg] -(opt < position[ps_prg])
       position[pr_prg] = position[pr_prg] -(opt < position[pr_prg])
+      if(opt == position[ps_prg]) then
+        to_stack(cmd_rld_prg,0)
+      else
+        to_stack_no_rec(cmd_set_prg,0)
+      end if  
       //if   (opt == position[ps_prg])
       //             reload [ps_prg], для этого нужен advance               //LOAD (ps_prg)
       //else if(run) SetData(position[pr_prg],"Local HMI",RW,PRG_SEL_LOC,1) //STORE(pr_prg)
@@ -727,9 +754,6 @@ while(st_top > 0)     //todo: check run state
     SEL = STP //to stps
     if(M_BLK_CNT[SEL] > (COM_BLK_CNT +1)) then
       opt = LIM(position[pw_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
-      if(opt == ps_stp) then
-        to_stack(cmd_advance + ps_stp,0) //это может быть текущая тоже, что и замечательно
-      end if
       to_stack(check_stp_limits,0)
       TRACE("!!!ERASE STP!!!")
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
@@ -745,6 +769,12 @@ while(st_top > 0)     //todo: check run state
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
       position[ps_stp] = position[ps_stp] -(opt < position[ps_stp])
       position[pr_stp] = position[pr_stp] -(opt < position[pr_stp] and position[pr_prg] == position[ps_prg])
+      if(opt == position[ps_stp]) then
+        to_stack(cmd_rld_sstp,0)
+      else
+        to_stack_no_rec(cmd_set_stp,0)
+      end if
+
       //if(opt == ps_stp) then reload position[ps_stp] LOAD (ps_prg->ps_stp) //advance
       //else                                           STORE(ps_prg->ps_stp)
     end if
