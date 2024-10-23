@@ -777,6 +777,7 @@ while(st_top > 0) //stack machine
   else if(evt == ev_rld_stp) then //reload stp [ps_prg][ps_stp]
     load_stp_from_prg_s()
     SEL = STP //to stp
+    reload_node_s(M_HEAD_BLK[SEL],NIL)
     //clear TIM, maybe save
     load_store_data_s('L',0,BLK_PLD_SZ)
   //-------------------------------------------------------------
