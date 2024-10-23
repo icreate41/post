@@ -474,11 +474,11 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[6],pos_hdl[6]
-short pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
-short ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
-short ev_set_prg = 50,ev_rld_prg = 51,ev_set_stp = 52,ev_rld_stp=53
-short ev_view = 62
+short position[8],pos_hdl[6]
+int pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
+int ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
+int ev_set_prg = 50,ev_rld_prg = 51,ev_set_stp = 52,ev_rld_stp=53
+int ev_view = 62
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,evt = 0,opt = 0
 short def_stp_src = 100,def_com_src = 200
@@ -598,16 +598,15 @@ if(not RES_STATE) then
 end if
 to_stack(ev_view +STP,0)
 to_stack(ev_view +PRG,0)
-to_stack(ev,opt)
-end if
+to_stack(evt,opt)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 while(st_top > 0) //stack event machine
   st_top = st_top -1
   evt = st_evt[st_top]
   opt = st_opt[st_top]
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  p = evt -ev_set_pos*(evt <  ev_get_pos)
-  p = p   -ev_get_pos*(evt >= ev_get_pos)
+  p = evt -ev_set_pos*(evt <  ev_get_pos) //ev_set_pos = 1
+  p = p   -ev_get_pos*(evt >= ev_get_pos) //ev_get_pos = 11
   if(p >= pw_stp and p <= pr_prg ) then
     TRACE("advance: [%d], opt :[%d]",p,opt)
     TRACE("want: [%d]",position[p] +opt)
@@ -620,13 +619,12 @@ while(st_top > 0) //stack event machine
     TRACE("GET: [%d]",position[p])
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    advance_s(COM_BLK_CNT*SEL +position[p])
+    advance_s(COM_BLK_CNT*(SEL == STP) +position[p])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
     ps_stp = ps_stp + (position[ps_prg] == position[pr_prg]) //need to check
     if(evt >= ev_get_pos) then
       to_stack(pos_hdl[p],0)
     end if
-  end if
   //-------------------------------------------------------------
   else if(evt == (ev_insert +PRG)) then //insert prg
     SEL = PRG //to prg
@@ -684,8 +682,8 @@ while(st_top > 0) //stack event machine
       TRACE("   insertion stp: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       remove_rp_s() //delete restore point
       TRACE("!!!INSERTION DONE!!!")
-      position[ps_stp] = position[ps_stp] +(opt <= position[ps_stp])
-      to_stack(ev_set_stp,0)
+      position[ps_stp] = position[ps_stp] +(opt <= position[ps_stp]) //смена либо sprg или rprg
+      to_stack(ev_set_stp,0) //[ps_prg] - получена, без зависимостей
     end if
   //-------------------------------------------------------------
   else if(evt == (ev_erase +PRG)) then //erase prg
@@ -721,9 +719,9 @@ while(st_top > 0) //stack event machine
       position[ps_prg] = position[ps_prg] -(opt < position[ps_prg])
       position[pr_prg] = position[pr_prg] -(opt < position[pr_prg])
       if(opt == position[ps_prg]) then
-        to_stack(ev_rld_prg,0)
+        to_stack(ev_rld_prg,0) //[ps_prg] - сломана, dep = [ps_prg]
       else
-        to_stack(ev_set_prg,0)
+        to_stack(ev_set_prg,0) //без зависимостей
       end if
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -743,11 +741,11 @@ while(st_top > 0) //stack event machine
       remove_rp_s() //delete restore point
       TRACE("!!!ERASE DONE!!!")
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
-      position[ps_stp] = position[ps_stp] -(opt < position[ps_stp])
-      if(opt == position[ps_stp]) then
-        to_stack(ev_rld_stp,0) //to_stack(check_stp_limits), обработчик cycle как opt
+      position[ps_stp] = position[ps_stp] -(opt < position[ps_stp]) //меняем либо sstep или rstep
+      if(opt == position[ps_stp]) then  //to_stack(check_stp_limits), обработчик cycle как opt
+        to_stack(ev_rld_stp,0) //[STP] сломан, требуется загрузка [ps_stp]
       else
-        to_stack(ev_set_stp,0)
+        to_stack(ev_set_stp,0) //[PRG] ок, без зависимостей
       end if
     end if
   //-------------------------------------------------------------
@@ -760,7 +758,7 @@ while(st_top > 0) //stack event machine
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST)
-    to_stack(ev_set_pos +pw_stp,BUFF[0] -position[ps_stp]) //check ps_stp
+    to_stack(ev_set_pos +pw_stp,BUFF[0] -position[pw_stp])
     to_stack(ev_set_pos +ps_stp,BUFF[0] -position[ps_stp])
   //-------------------------------------------------------------
   else if(evt == ev_set_stp) then //save stp [ps_prg]
@@ -768,8 +766,8 @@ while(st_top > 0) //stack event machine
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     //think about RP
-    //load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST) //todo - prepare COM
-    //BUFF[0] = position[ps_stp] func maybe
+    load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST) //todo - prepare COM
+    BUFF[0] = position[ps_stp]                       //func maybe
     load_store_data_s('S',0,BLK_PLD_SZ*COM_BLK_OFST)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   else if(evt == ev_rld_stp) then //reload stp [ps_prg][ps_stp]
