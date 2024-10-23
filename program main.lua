@@ -503,8 +503,10 @@ if(INIT() == true) then
   set_ev_dep(ev_erase   +STP   ,ev_get_pos +pw_stp)
   set_ev_dep(ev_view    +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_view    +STP   ,ev_get_pos +pw_stp)
-  set_ev_dep(ev_rld_prg        ,ev_get_pos +ps_prg)
-  set_ev_dep(ev_rld_stp        ,ev_get_pos +ps_stp)
+  set_ev_dep(ev_set_prg        ,ev_get_pos +ps_prg)
+  set_ev_dep(ev_set_stp        ,ev_get_pos +ps_stp)
+  set_ev_dep(ev_rld_stp        ,ev_set_stp        )
+  set_ev_dep(ev_rld_prg        ,ev_set_prg        )
   run = 0
   //
   init_values()
@@ -751,12 +753,11 @@ while(st_top > 0) //stack machine
     end if
   //-------------------------------------------------------------
   else if(evt == ev_set_prg) then //save prg
-  	SEL = PRG
+    SEL = PRG
     p = ps_prg + run
     SetData(position[p],"Local HMI",RW,PRG_SEL_LOC,1)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == ev_rld_prg) then //reload prg [ps_prg]
-  	to_stack(ev_set_prg,0)
     load_stp_from_prg_s()
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
