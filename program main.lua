@@ -499,10 +499,10 @@ if(INIT() == true) then
   pos_hdl[pr_stp] = ev_rld_stp
   set_ev_dep(ev_get_pos +ps_stp,ev_get_pos +ps_prg)
   set_ev_dep(ev_get_pos +pw_stp,ev_get_pos +ps_prg)
-  set_ev_dep(ev_get_pos +pr_stp,ev_get_pos +pr_prg)  
+  set_ev_dep(ev_get_pos +pr_stp,ev_get_pos +pr_prg) //подумай над тем, чтобы убрать эти обработчики
   set_ev_dep(ev_set_pos +ps_stp,ev_get_pos +ps_prg)
   set_ev_dep(ev_set_pos +pw_stp,ev_get_pos +ps_prg)
-  set_ev_dep(ev_set_pos +pr_stp,ev_get_pos +pr_prg)
+  set_ev_dep(ev_set_pos +pr_stp,ev_get_pos +pr_prg) //подумай над тем, чтобы убрать эти обработчики
   set_ev_dep(ev_insert  +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_insert  +STP   ,ev_get_pos +pw_stp)
   set_ev_dep(ev_erase   +PRG   ,ev_get_pos +pw_prg)
