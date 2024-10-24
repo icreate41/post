@@ -624,7 +624,7 @@ while(RES_STATE and st_top > 0) //stack machine
     TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
     advance_s(COM_BLK_CNT*SEL +position[p])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
-    ps_stp = pw_stp +1 +(position[ps_prg] == position[pr_prg]) //need to check
+    ps_stp = pw_stp +1 +(position[ps_prg] == position[pr_prg]and run) //todo; load from ui
     if(evt < ev_get_pos) then
       to_stack(pos_hdl[p],0)
     end if
