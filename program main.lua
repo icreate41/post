@@ -474,20 +474,26 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[8],pos_hdl[6]
+short position[6],pos_hdl[6],sc_blk[6],sp_blk[6]
 int pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 int ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
 int ev_set_prg = 50,ev_rld_prg = 51,ev_set_stp = 52,ev_rld_stp=53
-int ev_view = 62
+int ev_swap = 30,ev_view = 62
+int dm = 0,dm_stp = 7,dm_prg = 56
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,evt = 0,opt = 0
 short def_stp_src = 100,def_com_src = 200
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
+  init_values()
+  load_config_s()
+  //  
+  FILL(ev_tbl  [0],0,64)
   FILL(position[0],0,6)
   FILL(pos_hdl [0],0,6)
-  FILL(ev_tbl  [0],0,64)
+  FILL(sc_blk[0],NIL,6)
+  FILL(sp_blk[0],NIL,6)
   pos_hdl[ps_prg] = ev_rld_prg
   pos_hdl[ps_stp] = ev_rld_stp
   pos_hdl[pr_stp] = ev_rld_stp
@@ -501,6 +507,8 @@ if(INIT() == true) then
   set_ev_dep(ev_insert  +STP   ,ev_get_pos +pw_stp)
   set_ev_dep(ev_erase   +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_erase   +STP   ,ev_get_pos +pw_stp)
+  set_ev_dep(ev_swap    +PRG   ,ev_get_pos +ps_prg)
+  set_ev_dep(ev_swap    +STP   ,ev_get_pos +ps_stp)
   set_ev_dep(ev_view    +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_view    +STP   ,ev_get_pos +pw_stp)
   set_ev_dep(ev_set_prg        ,ev_get_pos +ps_prg)
@@ -508,9 +516,6 @@ if(INIT() == true) then
   set_ev_dep(ev_rld_stp        ,ev_set_stp        )
   set_ev_dep(ev_rld_prg        ,ev_set_prg        )
   run = 0
-  //
-  init_values()
-  load_config_s()
   //try to restore
   load_rp_s()
   if     (RESTORE&RP_DEL_BLK) then
@@ -553,6 +558,7 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
     wend
     SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
     RES_STATE = RES_STATE and(M_BLK_CNT[SEL] > 0)
+    GetData(position[pw_prg],"Local HMI",RW,PRG_SEL_LOC,1)
     GetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
   else
     TRACE("CONFIG: created")
@@ -612,18 +618,28 @@ while(RES_STATE and st_top > 0) //stack machine
   p = p   -ev_get_pos*(evt >= ev_get_pos) //ev_get_pos = 11
   if(p >= pw_stp and p <= pr_prg ) then
     TRACE("advance: [%d], opt :[%d]",p,opt)
-    TRACE("want: [%d]",position[p] +opt)
     SEL = p/3 == pw_stp/3
     if(SEL == STP) then
       load_stp_from_prg_s()
     end if
     GetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
-    position[p] = LIM(position[p] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT*SEL -1)
-    TRACE("GET: [%d]",position[p])
-    reload_node_s(M_HEAD_BLK[SEL],NIL)
-    TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
-    advance_s(COM_BLK_CNT*SEL +position[p])
     TRACE("PRG BLK CNT: [%d]",M_BLK_CNT[SEL])
+    TRACE("want: [%d]",position[p] +opt)
+    opt = LIM(position[p] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT*SEL -1)
+    TRACE("GET : [%d]",opt)
+    if(sc_blk[p] > NIL) then
+      reload_node_s(sc_blk[p],sp_blk[p])
+      TRACE("before: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      advance_s(opt -position[p])
+    else
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      TRACE("head: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      advance_s(COM_BLK_CNT*SEL +opt)
+    end if
+    TRACE("after: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+    position[p] = opt
+    sc_blk[p] = M_CUR_BLK[SEL]
+    sp_blk[p] = M_PRV_BLK[SEL]
     ps_stp = pw_stp +1 +(position[ps_prg] == position[pr_prg]and run) //todo; load from ui
     if(evt < ev_get_pos) then
       to_stack(pos_hdl[p],0)
@@ -666,6 +682,7 @@ while(RES_STATE and st_top > 0) //stack machine
       position[ps_prg] = position[ps_prg] +(opt <= position[ps_prg])
       position[pr_prg] = position[pr_prg] +(opt <= position[pr_prg])
       to_stack(ev_set_prg,0) //без зависимостей
+      dm = dm_prg
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == (ev_insert +STP)) then //insert stp
@@ -687,6 +704,7 @@ while(RES_STATE and st_top > 0) //stack machine
       TRACE("!!!INSERTION DONE!!!")
       position[ps_stp] = position[ps_stp] +(opt <= position[ps_stp]) //смена либо sprg или rprg
       to_stack(ev_set_stp,0) //[ps_prg] - получена, без зависимостей
+      dm = dm_stp
     end if
   //-------------------------------------------------------------
   else if(evt == (ev_erase +PRG)) then //erase prg
@@ -726,6 +744,7 @@ while(RES_STATE and st_top > 0) //stack machine
       else
         to_stack(ev_set_prg,0) //без зависимостей
       end if
+      dm = dm_prg
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == (ev_erase +STP)) then //erase stp
@@ -750,7 +769,37 @@ while(RES_STATE and st_top > 0) //stack machine
       else
         to_stack(ev_set_stp,0) //[PRG] ок, без зависимостей
       end if
+      dm = dm_stp
     end if
+  //-------------------------------------------------------------
+  else if(evt == (ev_swap +PRG)) then //swap prg
+    opt = LIM(position[ps_prg] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+    if(opt == position[ps_prg]) then
+      continue
+    end if
+    load_store_data_s('L',RP_DAT_OFST,BLK_PLD_SZ)
+    advance_s(opt -position[ps_prg])
+    load_store_data_s('L',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
+    //create_rp_s(...)
+    update_retain_s()
+    load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
+    advance_s(position[ps_prg] -opt)
+    load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
+    remove_rp_s() //delete restore point
+    //k = position[ps_prg]
+    //position[ps_prg] = k - (k - opt)*(k == opt)
+    //position[ps_prg] = k + (k - opt)*(k == opt)
+
+    //position[ps_prg] = position[...] ...
+    //position[pr_prg] = position[...] ...
+
+    //to_stack(ev_set_prg,0)
+
+    //load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
+    //advance_s(RES_VAR)
+    //load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
+
+    dm = dm_prg | dm_stp
   //-------------------------------------------------------------
   else if(evt == ev_set_prg) then //save prg
     SEL = PRG
@@ -764,6 +813,7 @@ while(RES_STATE and st_top > 0) //stack machine
     load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST)
     position[pw_stp] = BUFF[0] //to_stack(ev_get_pos +pw_stp,BUFF[0] -position[pw_stp])
     position[ps_stp] = BUFF[0] //to_stack(ev_get_pos +ps_stp,BUFF[0] -position[ps_stp])
+    dm = dm_stp
   //-------------------------------------------------------------
   else if(evt == ev_set_stp) then //save stp [ps_prg]
     load_stp_from_prg_s()
@@ -800,6 +850,16 @@ while(RES_STATE and st_top > 0) //stack machine
       advance_s(DIR_RIGHT)
       p = p +1
     wend
+  end if
+  //-------------------------------------------------------------
+  if(dm) then
+    for k = pw_stp to pr_prg
+      if(dm & (1 << k)) then
+        sc_blk[k] = NIL
+        sp_blk[k] = NIL
+      end if
+    next
+    dm = 0
   end if
 wend
 TRACE("OK = %d",RES_STATE)
