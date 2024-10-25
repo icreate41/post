@@ -482,7 +482,8 @@ int ev_swap = 30,ev_view = 62
 int dm = 0,dm_stp = 7,dm_prg = 56
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int p,k,evt = 0,opt = 0
-short def_stp_src = 100,def_com_src = 200
+short def_stp_src = 100
+short out_com_prt = 300,prg_wnd_dat = 510
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if(INIT() == true) then
@@ -499,10 +500,10 @@ if(INIT() == true) then
   pos_hdl[pr_stp] = ev_rld_stp
   set_ev_dep(ev_get_pos +ps_stp,ev_get_pos +ps_prg)
   set_ev_dep(ev_get_pos +pw_stp,ev_get_pos +ps_prg)
-  set_ev_dep(ev_get_pos +pr_stp,ev_get_pos +pr_prg) //подумай над тем, чтобы убрать эти обработчики
+  set_ev_dep(ev_get_pos +pr_stp,ev_get_pos +pr_prg)  
   set_ev_dep(ev_set_pos +ps_stp,ev_get_pos +ps_prg)
   set_ev_dep(ev_set_pos +pw_stp,ev_get_pos +ps_prg)
-  set_ev_dep(ev_set_pos +pr_stp,ev_get_pos +pr_prg) //подумай над тем, чтобы убрать эти обработчики
+  set_ev_dep(ev_set_pos +pr_stp,ev_get_pos +pr_prg)
   set_ev_dep(ev_insert  +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_insert  +STP   ,ev_get_pos +pw_stp)
   set_ev_dep(ev_erase   +PRG   ,ev_get_pos +pw_prg)
@@ -587,7 +588,7 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
       FILL(BUFF[0],0,COM_ADD_SZ)
       load_store_data_s('S',0,COM_ADD_SZ)
       advance_s(COM_BLK_OFST)
-      GetData(BUFF[0],"Local HMI",LW,def_com_src,COM_REQ_SZ)
+      GetData(BUFF[0],"Local HMI","Program_default_com",COM_REQ_SZ)
       load_store_data_s('S',0,COM_REQ_SZ)
       SEL = PRG
     wend
@@ -674,7 +675,7 @@ while(RES_STATE and st_top > 0) //stack machine
       FILL(BUFF[0],0,COM_ADD_SZ)
       load_store_data_s('S',0,COM_ADD_SZ)
       advance_s(COM_BLK_OFST)
-      GetData(BUFF[0],"Local HMI",LW,def_com_src,COM_REQ_SZ)
+      GetData(BUFF[0],"Local HMI","Program_default_com",COM_REQ_SZ)
       load_store_data_s('S',0,COM_REQ_SZ)
       SEL = PRG
       remove_rp_s() //delete restore point
@@ -805,14 +806,25 @@ while(RES_STATE and st_top > 0) //stack machine
     SEL = PRG
     p = ps_prg + run
     SetData(position[p],"Local HMI",RW,PRG_SEL_LOC,1)
+    if(opt) then
+      load_stp_from_prg_s()
+      SEL = STP //to stp
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      advance_s(COM_BLK_OFST)
+      GetData(BUFF[0],"Local HMI","Program_default_com",COM_REQ_SZ)
+      load_store_data_s('S',0,COM_REQ_SZ)
+    end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == ev_rld_prg) then //reload prg [ps_prg]
     load_stp_from_prg_s()
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST)
-    position[pw_stp] = BUFF[0] //to_stack(ev_get_pos +pw_stp,BUFF[0] -position[pw_stp])
-    position[ps_stp] = BUFF[0] //to_stack(ev_get_pos +ps_stp,BUFF[0] -position[ps_stp])
+    position[pw_stp] = BUFF[0]
+    position[ps_stp] = BUFF[0]
+    advance_s(COM_BLK_OFST)
+    load_store_data_s('L',0,COM_REQ_SZ)
+    SetData(BUFF[0],"Local HMI",LW,out_com_prt,COM_REQ_SZ)
     dm = dm_stp
   //-------------------------------------------------------------
   else if(evt == ev_set_stp) then //save stp [ps_prg]
@@ -833,13 +845,24 @@ while(RES_STATE and st_top > 0) //stack machine
   //-------------------------------------------------------------
   else if(evt == (ev_view +PRG)) then //view prg //1 is better then 2
     p = 0
-    TRACE(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
     SEL = PRG
-    while((M_CUR_BLK[SEL] > NIL)and(p < 10))
+    while((M_CUR_BLK[SEL] > NIL)and(p < 8))
+      load_stp_from_prg_s()
+      SEL = STP //to stp
+      reload_node_s(M_HEAD_BLK[SEL],NIL)
+      advance_s(COM_BLK_OFST)
+      load_store_data_s('L',0,COM_REQ_SZ)
+      SetData(BUFF[0],"Local HMI",LW,COM_REQ_SZ*p +prg_wnd_dat,COM_REQ_SZ) //OUT
       TRACE("print prg!!!: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
+      SEL = PRG
       advance_s(DIR_RIGHT)
       p = p +1
     wend
+    BUFF[0] = position[pw_prg]
+    BUFF[1] = M_BLK_CNT[PRG]
+    BUFF[2] = p
+    BUFF[3] = position[ps_prg]
+    SetData(BUFF[0],"Local HMI","Program_window_view_begin",4)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == (ev_view +STP)) then //view stp //1 is better then 2
     p = 0
@@ -865,5 +888,8 @@ wend
 TRACE("OK = %d",RES_STATE)
 SetData(position[0]     ,"Local HMI",LW,1000,6)
 SetData(position[ps_stp],"Local HMI",LW,1001,1)
+//-------------------------------------------------------------
+p = 1 + RES_STATE
+SetData(p,"Local HMI",LW,10,1)
 //-------------------------------------------------------------
 end macro_command

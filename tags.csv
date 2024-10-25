@@ -1,0 +1,20 @@
+Program_window_view_count,Local HMI,LW,502,,16-bit Unsigned
+Program_window_view_string_1,Local HMI,LW,510,,Undesignated
+Program_window_view_string_2,Local HMI,LW,526,,Undesignated
+Program_window_view_string_3,Local HMI,LW,542,,Undesignated
+Program_window_view_string_4,Local HMI,LW,558,,Undesignated
+Program_window_view_string_5,Local HMI,LW,574,,Undesignated
+Program_window_view_string_6,Local HMI,LW,590,,Undesignated
+Program_window_view_string_7,Local HMI,LW,606,,Undesignated
+Program_window_view_string_8,Local HMI,LW,622,,Undesignated
+Program_window_view_string_9,Local HMI,LW,638,,Undesignated
+Program_window_view_string_10,Local HMI,LW,654,,Undesignated
+Program_window_view_string_tmp,Local HMI,LW,670,,Undesignated
+Program_window_total,Local HMI,LW,501,,16-bit Unsigned
+Program_window_view_begin,Local HMI,LW,500,,16-bit Unsigned
+Program_Front_Evt,Local HMI,LW,10,,32-bit Signed
+Program_Front_Opt,Local HMI,LW,12,,32-bit Signed
+Program_Front_Sel,Local HMI,LW,14,,32-bit Signed
+Program_Back_Evt,Local HMI,LW,0,,32-bit Signed
+Program_Back_Opt,Local HMI,LW,2,,32-bit Signed
+Program_default_com,Local HMI,LW,200,,Undesignated
