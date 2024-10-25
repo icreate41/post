@@ -352,7 +352,7 @@ sub insert_node_s(short blk) //shift_next
   chk = M_PRV_BLK[SEL] ^ M_NXT_BLK[SEL]
   SetData(M_PRV_BLK[SEL],"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_CUR_BLK[SEL],1)
   SetData(M_NXT_BLK[SEL],"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_CUR_BLK[SEL],1)
-  SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_CUR_BLK[SEL],1)
+  SetData(chk           ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_CUR_BLK[SEL],1)
 end sub
 //-------------------------------------------------------------
 sub erase_node_s() //shift_next    
@@ -367,16 +367,16 @@ sub erase_node_s() //shift_next
     GetData(prv          ,"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_PRV_BLK[SEL],1)
     chk = prv ^ M_NXT_BLK[SEL]
     SetData(M_NXT_BLK[SEL],"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_PRV_BLK[SEL],1)
-    SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
+    SetData(chk           ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_PRV_BLK[SEL],1)
   else
     M_HEAD_BLK[SEL] = M_NXT_BLK[SEL]
     SetData(M_HEAD_BLK[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_HEAD,1)
   end if
   if(M_NXT_BLK[SEL] > NIL) then
     SetData(M_PRV_BLK[SEL],"Local HMI",RW,DAT_OFST+0+BLK_SZ*M_NXT_BLK[SEL],1)
-    GetData(nxt               ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_NXT_BLK[SEL],1)
+    GetData(nxt           ,"Local HMI",RW,DAT_OFST+1+BLK_SZ*M_NXT_BLK[SEL],1)
     chk = nxt ^ M_PRV_BLK[SEL]
-    SetData(chk               ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_NXT_BLK[SEL],1)
+    SetData(chk           ,"Local HMI",RW,DAT_OFST+2+BLK_SZ*M_NXT_BLK[SEL],1)
   end if
   RES_BLK = M_CUR_BLK[SEL]
   M_BLK_CNT[SEL] = M_BLK_CNT[SEL] -1
@@ -812,6 +812,7 @@ while(RES_STATE and st_top > 0) //stack machine
       reload_node_s(M_HEAD_BLK[SEL],NIL)
       advance_s(COM_BLK_OFST)
       GetData(BUFF[0],"Local HMI","Program_default_com",COM_REQ_SZ)
+      SetData(BUFF[0],"Local HMI",LW,out_com_prt,COM_REQ_SZ)
       load_store_data_s('S',0,COM_REQ_SZ)
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
