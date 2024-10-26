@@ -1,4 +1,15 @@
-Program_window_view_count,Local HMI,LW,502,,16-bit Unsigned
+Program_Back_Evt,Local HMI,LW,0,,32-bit Signed
+Program_Back_Opt,Local HMI,LW,2,,32-bit Signed
+Program_Front_Evt,Local HMI,LW,10,,32-bit Signed
+Program_Front_Opt,Local HMI,LW,12,,32-bit Signed
+Program_Front_Sel,Local HMI,LW,14,,32-bit Signed
+Program_Front_Sel_Prg,Local HMI,LW,16,,32-bit Signed
+Program_Front_Sel_Typ,Local HMI,LW,18,,32-bit Signed
+Program_default_stp,Local HMI,LW,100,,Undesignated
+Program_default_com,Local HMI,LW,200,,Undesignated
+Program_sel_com,Local HMI,LW,300,,Undesignated
+Program_run_com,Local HMI,LW,400,,Undesignated
+Program_run_stp,Local HMI,LW,450,,Undesignated
 Program_window_view_string_1,Local HMI,LW,510,,Undesignated
 Program_window_view_string_2,Local HMI,LW,526,,Undesignated
 Program_window_view_string_3,Local HMI,LW,542,,Undesignated
@@ -9,14 +20,8 @@ Program_window_view_string_7,Local HMI,LW,606,,Undesignated
 Program_window_view_string_8,Local HMI,LW,622,,Undesignated
 Program_window_view_string_9,Local HMI,LW,638,,Undesignated
 Program_window_view_string_10,Local HMI,LW,654,,Undesignated
-Program_window_view_string_tmp,Local HMI,LW,670,,Undesignated
-Program_window_total,Local HMI,LW,501,,16-bit Unsigned
-Program_window_view_begin,Local HMI,LW,500,,16-bit Unsigned
-Program_Front_Evt,Local HMI,LW,10,,32-bit Signed
-Program_Front_Opt,Local HMI,LW,12,,32-bit Signed
-Program_Front_Sel,Local HMI,LW,14,,32-bit Signed
-Program_Front_Sel_Prg,Local HMI,LW,16,,32-bit Signed
-Program_Front_Sel_Typ,Local HMI,LW,18,,32-bit Signed
-Program_Back_Evt,Local HMI,LW,0,,32-bit Signed
-Program_Back_Opt,Local HMI,LW,2,,32-bit Signed
-Program_default_com,Local HMI,LW,200,,Undesignated
+Program_window_updated_com,Local HMI,LW,700,,Undesignated
+Program_window_updated_stp,Local HMI,LW,800,,Undesignated
+Program_header,Local HMI,LW,900,,16-bit Unsigned,ConversionTag,16-bit Unsigned,,,15
+Program_window_prg_elements,Local HMI,LW,900,,16-bit Unsigned
+Program_window_stp_elements,Local HMI,LW,901,,16-bit Unsigned
