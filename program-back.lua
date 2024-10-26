@@ -5,7 +5,7 @@ int HEADER = 0x66FFC0DE,VERSION = 0x1
 int DATA_TYPE =0x1,BLK_HDR_SZ = 3,STP_ADD_SZ = 2,STP_REQ_SZ = 5,MAX_DAT_SZ = 262140
 int CFG_OFST = 0,DAT_OFST = 1000,COM_ADD_SZ = 10,COM_REQ_SZ = 16
 int MAX_PRG_CNT = 500, MAX_STP_CNT = 500, MAX_BUF_SZ = 288,RP_DAT_OFST=32
-int BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR,PRG_SEL_LOC
+int BLK_CNT,BLK_PLD_SZ,BLK_SZ,MAX_BLK_CNT,COM_BLK_OFST,COM_BLK_CNT,RES_VAR,PRG_SEL_LOC
 //-------------------------------------------------------------
 int BO[3] = {0, 768, 792}, BITMAP[793]
 short BUFF[289],NIL = -1
@@ -17,7 +17,7 @@ short RP_SAV_DAT = 1,RP_NEW_STP = 2,RP_DEL_BLK = 4,RP_SWP_BLK = 8,RP_NEW_PRG = 1
 int  M_HEAD_LOC[2]
 short M_BLK_CNT[2],M_HEAD_BLK[2],M_CUR_BLK[2],M_PRV_BLK[2],M_NXT_BLK[2]
 short SEL=0,PRG=0,STP=1,LOC_OFST_HEAD=0,LOC_OFST_CNT=1
-short BLK_CNT,RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
+short RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //-------------------------------------------------------------
 //COMMON
 int   COM_TIM
@@ -908,6 +908,8 @@ while(RES_STATE and st_top > 0) //stack machine
 wend
 TRACE("OK = %d",RES_STATE)
 SetData(header[0],"Local HMI","Program_header",15)
+SetData(MAX_BLK_CNT,"Local HMI","Program_blk_info[0]",1)
+SetData(BLK_CNT    ,"Local HMI","Program_blk_info[1]",1)
 //-------------------------------------------------------------
 p = 1 + RES_STATE
 SetData(p,"Local HMI","Program_Front_Evt",1)
