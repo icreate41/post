@@ -892,7 +892,7 @@ while(RES_STATE and st_top > 0) //stack machine
     header[ 3] = position[pw_stp]
     header[ 5] = position[ps_stp]
     header[ 7] = position[pr_stp]
-    header[ 9] = M_BLK_CNT[PRG]
+    header[ 9] = M_BLK_CNT[STP]
     //--header[10] = prg repeats
   end if
   //-------------------------------------------------------------
