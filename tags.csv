@@ -16,6 +16,7 @@ Program_Front_Evt,Local HMI,LW,10,,32-bit Signed
 Program_Front_Opt,Local HMI,LW,12,,32-bit Signed
 Program_Front_Sel,Local HMI,LW,14,,32-bit Signed
 Program_Front_Sel_Prg,Local HMI,LW,16,,32-bit Signed
+Program_Front_Sel_Typ,Local HMI,LW,18,,32-bit Signed
 Program_Back_Evt,Local HMI,LW,0,,32-bit Signed
 Program_Back_Opt,Local HMI,LW,2,,32-bit Signed
 Program_default_com,Local HMI,LW,200,,Undesignated
