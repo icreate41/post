@@ -2,7 +2,7 @@
 macro_command main()
 //-------------------------------------------------------------
 int evt,opt,p,typ,sel
-int out[2] = {0,0}
+int send_evt=0,send_opt=0
 char prgname[32]
 short buff[128],header[15]
 float f
@@ -36,37 +36,28 @@ end if
 //-------------------------------------------------------------
 TRACE("FRONT: EVT = [%d]:[%d]",evt,opt)
 if     (evt == 10) then //advance window prg
-  out[0] = 4 -3*sel
-  out[1] = opt
+  send_evt = 4 -3*sel
+  send_opt = opt
 else if(evt == 30) then
   if     (typ == 0) then //set prg
-    out[0] = 1 +4 -3*sel
-    if (sel == 0) then
-      out[1] = header[2] +opt -header[4] //pw - ps + x
-    else
-      out[1] = header[3] +opt -header[5] //pw - ps + x
-    end if
+    send_evt = 1 +4 -3*sel
+    send_opt = if_((sel),header[3]-header[5],header[2]-header[4]) +opt  //pw - ps + x
   else if(typ == 1) then //insert prg
-    out[0] = 20 +sel
-    out[1] = opt
+    send_evt = 20 +sel
+    send_opt = opt
   else if(typ == 2) then //delete prg
-    out[0] = 25 +sel
-    out[1] = opt
+    send_evt = 25 +sel
+    send_opt = opt
   else if(typ == 3) then //rename
-    out[0] = 40 +sel
-    out[1] = opt
+    send_evt = 40 +sel
+    send_opt = opt
   end if
 else if(evt == 50) then
-  if(opt > 3) then
-    opt = 3
-  end if
-  if(opt == typ) then
-    typ = 0
-  else
-    typ = opt
-  end if
+  opt = if_((opt < 0), 0,opt)
+  opt = if_((opt > 3), 3,opt)
+  typ = if_((opt == typ), 0,opt)
 else if(evt == 60) then
-  sel = opt
+  sel = opt or 0
   p = 11 +sel
   SetData(p,"Local HMI",LW,3000,1)
 end if
@@ -89,6 +80,11 @@ else
   SetData(p,"Local HMI","Program_Front_Sel_Prg",1)  
 end if    
 SetData(typ,"Local HMI","Program_Front_Sel_Typ",1)
-SetData(out[0],"Local HMI","Program_Back_Evt",2)
+if(send_evt) then
+  SetData(send_evt,"Local HMI","Program_Back_Evt",1)
+  SetData(send_opt,"Local HMI","Program_Back_Opt",1)
+  DELAY(50)
+  ASYNC_TRIG_MACRO(0)
+end if
 //-------------------------------------------------------------
 end macro_command

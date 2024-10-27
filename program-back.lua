@@ -560,8 +560,8 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
     wend
     SetData(M_BLK_CNT[SEL],"Local HMI",RW,M_HEAD_LOC[SEL]+LOC_OFST_CNT,1)
     RES_STATE = RES_STATE and(M_BLK_CNT[SEL] > 0)
-    GetData(position[pw_prg],"Local HMI",RW,PRG_SEL_LOC,1)
     GetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
+    position[pw_prg] = position[ps_prg]/8 *8
   else
     TRACE("CONFIG: created")
   end if
@@ -596,19 +596,20 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
     SetData(position[ps_prg],"Local HMI",RW,PRG_SEL_LOC,1)
     TRACE("created: [%d], prgs [%d]",BLK_CNT,M_BLK_CNT[SEL])
   end if
+  to_stack(ev_view+PRG,0)
   to_stack(ev_rld_dat +PRG,0)
 end if
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-GetData(evt,"Local HMI",LW,0,1)
-GetData(opt,"Local HMI",LW,2,1)
+GetData(evt,"Local HMI","Program_Back_Evt",1)
+GetData(opt,"Local HMI","Program_Back_Opt",1)
 p = 0
-SetData(p,"Local HMI",LW,0,1)
+SetData(p  ,"Local HMI","Program_Back_Evt",1)
 if(not RES_STATE) then
   TRACE("FAILURE")
   return
 end if
-to_stack(ev_view +STP,0)
-to_stack(ev_view +PRG,0)
+to_stack(if_((st_top),0,ev_view+PRG)+0,0)
+to_stack(ev_view+PRG,0)
 to_stack(evt,opt)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 while(RES_STATE and st_top > 0) //stack machine
@@ -741,11 +742,7 @@ while(RES_STATE and st_top > 0) //stack machine
       TRACE("blk cnt: [%d]",BLK_CNT)
       position[ps_prg] = position[ps_prg] -(opt < position[ps_prg])
       position[pr_prg] = position[pr_prg] -(opt < position[pr_prg])
-      if(opt == position[ps_prg]) then
-        to_stack(ev_rld_dat +PRG,0)
-      else
-        to_stack(ev_sav_pos +PRG,0)
-      end if
+      to_stack(if_((opt==position[ps_prg]),ev_rld_dat+PRG,ev_sav_pos+PRG)+0,0)
       dm = dm_prg
     end if
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -766,11 +763,7 @@ while(RES_STATE and st_top > 0) //stack machine
       TRACE("!!!ERASE DONE!!!")
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
       position[ps_stp] = position[ps_stp] -(opt < position[ps_stp]) //меняем либо sstep или rstep
-      if(opt == position[ps_stp]) then  //to_stack(check_stp_limits), обработчик cycle как opt
-        to_stack(ev_rld_dat +STP,0)
-      else
-        to_stack(ev_sav_pos +STP,0)
-      end if
+      to_stack(if_((opt==position[ps_stp]),ev_rld_dat+STP,ev_sav_pos+STP)+0,0) //to_stack(check_stp_limits), обработчик cycle как opt
       dm = dm_stp
     end if
   //-------------------------------------------------------------
@@ -827,8 +820,8 @@ while(RES_STATE and st_top > 0) //stack machine
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST)
-    position[pw_stp] = BUFF[0]
     position[ps_stp] = BUFF[0]
+    position[pw_stp] = position[ps_stp]/5 *5
     advance_s(COM_BLK_OFST)
     load_store_data_s('L',0,COM_REQ_SZ)
     SetData(BUFF[0],"Local HMI","Program_sel_com",COM_REQ_SZ)
@@ -871,6 +864,7 @@ while(RES_STATE and st_top > 0) //stack machine
       advance_s(DIR_RIGHT)
       p = p +1
     wend
+    to_stack(ev_view+STP,0)
     header[0] = p
     header[2] = position[pw_prg]
     header[4] = position[ps_prg]
@@ -912,6 +906,9 @@ SetData(MAX_BLK_CNT,"Local HMI","Program_blk_info[0]",1)
 SetData(BLK_CNT    ,"Local HMI","Program_blk_info[1]",1)
 //-------------------------------------------------------------
 p = 1 + RES_STATE
+SetData(p,"Local HMI","Program_Front_Evt ",1)
 SetData(p,"Local HMI","Program_Front_Evt",1)
+DELAY(50)
+ASYNC_TRIG_MACRO(1)
 //-------------------------------------------------------------
 end macro_command
