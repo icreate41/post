@@ -7,7 +7,7 @@ char prgname[32]
 short buff[128],header[15],elmnts[2],wndpos[2],selpos[2],runpos[2]
 int pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 int ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
-int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40
+int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40,ev_swap = 45
 float f
 //-------------------------------------------------------------
 if(INIT() == true) then
@@ -72,6 +72,9 @@ else if(evt == 60) then
     send_evt = ev_get_pos +if_((sel),pw_stp,pw_prg)
     send_opt = p
   end if
+else if(evt == 70) then
+  send_evt = ev_swap
+  send_opt = 1
 end if
 //-------------------------------------------------------------
 if (sel == 0) then
