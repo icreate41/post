@@ -59,9 +59,12 @@ else if(evt == 30) then
   else if(typ == 3) then //rename
     send_evt = ev_sav_dat +sel
     send_opt = opt
+  else if(typ == 4) then //swap
+    send_evt = ev_swap +sel
+    send_opt = wndpos[sel] -selpos[sel] +opt
   end if
 else if(evt == 50) then
-  opt = lim(opt,0,3)
+  opt = lim(opt,0,4)
   typ = if_((opt == typ),0,opt)
 else if(evt == 60) then
   sel = lim(opt,0,1)
@@ -72,9 +75,6 @@ else if(evt == 60) then
     send_evt = ev_get_pos +if_((sel),pw_stp,pw_prg)
     send_opt = p
   end if
-else if(evt == 70) then
-  send_evt = ev_swap
-  send_opt = 1
 end if
 //-------------------------------------------------------------
 if (sel == 0) then

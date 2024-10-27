@@ -780,26 +780,31 @@ while(RES_STATE and st_top > 0) //stack machine
     advance_s(position[ps_prg] -opt)
     load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
     //remove_rp_s() //delete restore point
-    
     k = position[ps_prg]
     position[ps_prg] = opt
-    position[pr_prg] = if_((position[pr_prg] == k  ),opt,position[pr_prg])
-    position[pr_prg] = if_((position[pr_prg] == opt),k  ,position[pr_prg])
+    p = if_((position[pr_prg] == k  ),opt,position[pr_prg])
+    p = if_((position[pr_prg] == opt),k  ,position[pr_prg])
+    position[pr_prg] = p
     to_stack(ev_sav_pos +PRG,0)
-    
-    dm = dm_prg //| dm_stp
-    
-    //position[ps_prg] = k - (k - opt)*(k == opt)
-    //position[ps_prg] = k + (k - opt)*(k == opt)
-
-    //position[ps_prg] = position[...] ...
-    //position[pr_prg] = position[...] ...
-
-    //to_stack(ev_set_prg,0)
-
-    //load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
-    //advance_s(RES_VAR)
-    //load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
+    dm = dm_prg
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  else if(evt == (ev_swap +STP)) then //swap stp
+    opt = lim(position[ps_stp] +opt,0,M_BLK_CNT[SEL] -COM_BLK_CNT -1)
+    if(opt == position[ps_stp]) then
+      continue
+    end if
+    load_store_data_s('L',RP_DAT_OFST,BLK_PLD_SZ)
+    advance_s(opt -position[ps_stp])
+    load_store_data_s('L',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
+    //create_rp_s(...)
+    //update_retain_s()
+    load_store_data_s('S',RP_DAT_OFST,BLK_PLD_SZ)
+    advance_s(position[ps_stp] -opt)
+    load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
+    //remove_rp_s() //delete restore point
+    position[ps_stp] = opt
+    to_stack(ev_sav_pos +STP,0)
+    dm = dm_stp
   //-------------------------------------------------------------
   else if(evt == (ev_sav_dat +PRG)) then //save prg data
     opt = lim(position[pw_prg] +opt,0,M_BLK_CNT[SEL] -1)
