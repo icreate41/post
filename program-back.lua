@@ -781,10 +781,10 @@ while(RES_STATE and st_top > 0) //stack machine
     load_store_data_s('S',RP_DAT_OFST+BLK_PLD_SZ,BLK_PLD_SZ)
     //remove_rp_s() //delete restore point
     k = position[ps_prg]
+    p = position[pr_prg]
     position[ps_prg] = opt
-    p = if_((position[pr_prg] == k  ),opt,position[pr_prg])
-    p = if_((position[pr_prg] == opt),k  ,position[pr_prg])
-    position[pr_prg] = p
+    position[pr_prg] = if_((p == k  ),opt,position[pr_prg])
+    position[pr_prg] = if_((p == opt),k  ,position[pr_prg])
     to_stack(ev_sav_pos +PRG,0)
     dm = dm_prg
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
