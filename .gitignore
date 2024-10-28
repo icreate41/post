@@ -4,4 +4,3 @@ weintek/
 *.bak1
 *.bak2
 *.bak3
-!.vscode/settings.json
