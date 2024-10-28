@@ -5,6 +5,20 @@ Program_Front_Opt,Local HMI,LW,12,,32-bit Signed
 Program_Front_Sel,Local HMI,LW,14,,32-bit Signed
 Program_Front_Sel_Prg,Local HMI,LW,16,,32-bit Signed
 Program_Front_Sel_Typ,Local HMI,LW,18,,32-bit Signed
+Program_Front_Prg_Bits,Local HMI,LW,50,,32-bit Signed
+Program_Front_Stp_Bits,Local HMI,LW,52,,32-bit Signed
+Program_Front_Prg_Typ,Local HMI,LW,54,,32-bit Signed
+Program_Front_Prg_Typ_Bit0,Local HMI,LW_Bit,5400,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit1,Local HMI,LW_Bit,5401,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit2,Local HMI,LW_Bit,5402,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit3,Local HMI,LW_Bit,5403,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit4,Local HMI,LW_Bit,5404,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit5,Local HMI,LW_Bit,5405,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit6,Local HMI,LW_Bit,5406,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Prg_Typ_Bit7,Local HMI,LW_Bit,5407,Program_Front_Prg_Typ Bits,Undesignated
+Program_Front_Stp_Typ,Local HMI,LW,56,,32-bit Signed
+Program_Front_Prg_Pos,Local HMI,LW,58,,32-bit Signed
+Program_Front_Stp_Pos,Local HMI,LW,60,,32-bit Signed
 Program_default_stp,Local HMI,LW,100,,Undesignated
 Program_default_com,Local HMI,LW,200,,Undesignated
 Program_sel_com,Local HMI,LW,300,,Undesignated

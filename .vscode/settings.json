@@ -1,3 +1,4 @@
 {
     "problems.visibility": false
+    "editor.renderWhitespace": "all"
 }

@@ -481,7 +481,7 @@ int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40
 int ev_swap = 45,ev_view = 62
 int dm = 0,dm_stp = 7,dm_prg = 56
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-int p,k,evt = 0,opt = 0
+int bits,p,k,evt = 0,opt = 0
 short prg_wnd_dat = 510,stp_wnd_dat = 1000
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -880,6 +880,17 @@ while(RES_STATE and st_top > 0) //stack machine
     header[4] = position[ps_prg]
     header[6] = position[pr_prg]
     header[8] = M_BLK_CNT[PRG]
+
+    //-- в функцию магию с битами
+    //-- ~(-1 <<(p))
+    //-- ~(-1 <<(p +1))
+    //-- ~(-1 <<(p)) & (5 << (position[ps_prg]-position[pw_prg])) >> 1
+    //-- foo(p, position[ps_prg]-position[pw_prg], arrpos)
+    
+    GetData(k,"Local HMI","Program_Front_Sel_Typ",1)
+    bits = ~(-1 <<(p +(k == 1)))
+    bits = bits & if_((k == 4),(5 << (position[ps_prg]-position[pw_prg])) >> 1,-1)
+    SetData(bits,"Local HMI","Program_Front_Prg_Typ",1)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == (ev_view +STP)) then
     p = 0
