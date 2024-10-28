@@ -4,3 +4,5 @@ weintek/
 *.bak1
 *.bak2
 *.bak3
+.vscode/*
+!.vscode/settings.json
