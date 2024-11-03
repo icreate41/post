@@ -41,4 +41,6 @@ Program_window_prg_elements,Local HMI,LW,900,,16-bit Unsigned
 Program_window_stp_elements,Local HMI,LW,901,,16-bit Unsigned
 Program_window_prg_begin,Local HMI,LW,902,,16-bit Unsigned
 Program_window_stp_begin,Local HMI,LW,903,,16-bit Unsigned
+Program_window_sel_prg,Local HMI,LW,910,,16-bit Unsigned
+Program_window_sel_stp,Local HMI,LW,911,,16-bit Unsigned
 Program_blk_info,Local HMI,LW,950,,32-bit Signed,ConversionTag,32-bit Signed,,,2

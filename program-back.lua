@@ -496,7 +496,7 @@ if(INIT() == true) then
   FILL(sp_blk[0],NIL,6)
   pos_hdl[ps_prg] = ev_rld_dat +PRG
   pos_hdl[ps_stp] = ev_rld_dat +STP
-  pos_hdl[pr_stp] = ev_rld_dat +2 //-- should be pr prg
+  pos_hdl[pr_stp] = ev_rld_dat +pr_stp
   set_ev_dep(ev_get_pos +ps_stp,ev_get_pos +ps_prg)
   set_ev_dep(ev_get_pos +pw_stp,ev_get_pos +ps_prg)
   set_ev_dep(ev_get_pos +pr_stp,ev_get_pos +pr_prg)  
@@ -510,12 +510,12 @@ if(INIT() == true) then
   set_ev_dep(ev_swap    +PRG   ,ev_get_pos +ps_prg)
   set_ev_dep(ev_swap    +STP   ,ev_get_pos +ps_stp)
   set_ev_dep(ev_sav_pos +PRG   ,ev_get_pos +ps_prg)
-  set_ev_dep(ev_sav_pos +2     ,ev_get_pos +pr_stp) //--pr stp
   set_ev_dep(ev_sav_pos +STP   ,ev_get_pos +ps_stp)
+  set_ev_dep(ev_sav_pos +pr_stp,ev_get_pos +pr_stp)
   set_ev_dep(ev_sav_dat +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_sav_dat +STP   ,ev_get_pos +pw_stp)
-  set_ev_dep(ev_rld_dat +2     ,ev_sav_pos +STP   ) //--pr prg
   set_ev_dep(ev_rld_dat +STP   ,ev_sav_pos +STP   )
+  set_ev_dep(ev_rld_dat +pr_stp,ev_sav_pos +pr_stp)
   set_ev_dep(ev_rld_dat +PRG   ,ev_sav_pos +PRG   )
   set_ev_dep(ev_view    +PRG   ,ev_get_pos +pw_prg)
   set_ev_dep(ev_view    +STP   ,ev_get_pos +pw_stp)
@@ -644,7 +644,7 @@ while(RES_STATE and st_top > 0) //stack machine
     position[p] = opt
     sc_blk[p] = M_CUR_BLK[SEL]
     sp_blk[p] = M_PRV_BLK[SEL]
-    ps_stp = pw_stp +1 +(position[ps_prg] == position[pr_prg]and run) //todo; load from ui --todo
+    //--ps_stp = pw_stp +1 +(position[ps_prg] == position[pr_prg]and run) //todo; load from ui --todo
     if(evt < ev_get_pos) then
       to_stack(pos_hdl[p],0)
     end if
@@ -845,16 +845,16 @@ while(RES_STATE and st_top > 0) //stack machine
     GetData(BUFF[0],"Local HMI","Program_window_updated_stp",BLK_PLD_SZ)
     load_store_data_s('S',0,BLK_PLD_SZ)    
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  else if(evt == (ev_sav_pos +STP)) then //save stp pos //-- +2 todo
+  else if(evt == (ev_sav_pos +STP)or evt == (ev_sav_pos +pr_stp)) then
     load_stp_from_prg_s()
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     //think about RP
     load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST) //todo - prepare COM
-    BUFF[0] = position[ps_stp] //--todo
+    BUFF[0] = if_(evt == (ev_sav_pos +STP),position[ps_stp],position[pr_stp]) //--todo
     load_store_data_s('S',0,BLK_PLD_SZ*COM_BLK_OFST)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
-  else if(evt == (ev_rld_dat +STP)) then //reload stp ??-- +2 todo
+  else if(evt == (ev_rld_dat +STP)or evt == (ev_rld_dat +pr_stp)) then //reload stp ??-- +2 todo
     load_stp_from_prg_s()
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
@@ -877,11 +877,12 @@ while(RES_STATE and st_top > 0) //stack machine
       p = p +1
     wend
     to_stack(ev_view+STP,0)
-    header[0] = p
-    header[2] = position[pw_prg]
-    header[4] = position[ps_prg]
-    header[6] = position[pr_prg]
-    header[8] = M_BLK_CNT[PRG]
+    header[ 0] = p
+    header[ 2] = position[pw_prg]
+    header[ 4] = position[ps_prg]
+    header[ 6] = position[pr_prg]
+    header[ 8] = M_BLK_CNT[PRG]
+    header[10] = position[ps_prg] -position[pw_prg]
 
     //-- в функцию магию с битами
     //-- ~(-1 <<(p))
@@ -910,9 +911,14 @@ while(RES_STATE and st_top > 0) //stack machine
     header[ 5] = position[ps_stp]
     header[ 7] = position[pr_stp]
     header[ 9] = M_BLK_CNT[STP] -COM_BLK_CNT
-    //--header[10] = prg repeats
+    header[11] = position[ps_stp] -position[pw_stp]
+    //--header[11] = prg repeats
   end if
   //-------------------------------------------------------------
+  if(position[ps_prg] == position[pr_prg]and run) then //-- todo: только при удалении или добавлении шага
+    
+  end if
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   if(dm) then
     for k = pw_stp to pr_prg
       if(dm & (1 << k)) then
