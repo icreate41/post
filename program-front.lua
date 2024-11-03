@@ -67,7 +67,14 @@ else if(evt == 50) then
   opt = lim(opt,0,4)
   typ = if_((opt == typ),0,opt)
   send_evt = ev_get_pos +pw_prg
-  send_opt = 0  
+  send_opt = 0
+else if(evt == 55) then
+  p = 10 +(opt or 0)
+  SetData(p,"Local HMI",LW,3000,1)
+  if(opt) then
+    send_evt = ev_get_pos +pw_prg
+    send_opt = 0
+  end if  
 else if(evt == 60) then
   sel = lim(opt,0,1)
   p = 11 +sel
