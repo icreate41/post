@@ -4,7 +4,7 @@ macro_command main()
 int evt,opt,p,typ,sel
 int window_sz[2] = {8,5},send_evt=0,send_opt=0
 char prgname[32]
-short buff[128],header[15],elmnts[2],wndpos[2],selpos[2],runpos[2]
+short buff[128],header[15],elmnts[2],wndpos[2],selpos[2],runpos[2],run
 int pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 int ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
 int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40,ev_swap = 45
@@ -38,6 +38,7 @@ GetData(elmnts[0],"Local HMI","Program_header[0]",2)
 GetData(wndpos[0],"Local HMI","Program_header[2]",2)
 GetData(selpos[0],"Local HMI","Program_header[4]",2)
 GetData(runpos[0],"Local HMI","Program_header[6]",2)
+GetData(run      ,"Local HMI","Program_header[12]",1)
 if not(evt) then
   return
 end if
@@ -48,7 +49,7 @@ if     (evt == 10) then //advance window prg
   send_opt = opt
 else if(evt == 30) then
   if     (typ == 0) then //set prg
-    send_evt = ev_set_pos +if_((sel),ps_stp,ps_prg)
+    send_evt = ev_set_pos +if_((sel),ps_stp+run,ps_prg)
     send_opt = wndpos[sel] -selpos[sel] +opt
   else if(typ == 1) then //insert prg
     send_evt = ev_insert  +sel

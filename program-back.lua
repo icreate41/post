@@ -619,7 +619,7 @@ while(RES_STATE and st_top > 0) //stack machine
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   p = evt -ev_set_pos*(evt <  ev_get_pos) //ev_set_pos = 1
   p = p   -ev_get_pos*(evt >= ev_get_pos) //ev_get_pos = 11
-  if(p >= pw_stp and p <= pr_prg ) then //-- todo; адванс при run кривой в логике или отображении
+  if(p >= pw_stp and p <= pr_prg ) then //-- todo; адванс при run кривой в логике или отображении, баганутое удаление в работе
     TRACE("advance: [%d], opt :[%d]",p,opt)
     SEL = p/3 == pw_stp/3
     if(SEL == STP) then
@@ -763,7 +763,8 @@ while(RES_STATE and st_top > 0) //stack machine
       TRACE("!!!ERASE DONE!!!")
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
       position[ps_stp] = position[ps_stp] -(opt < position[ps_stp]) //меняем либо sstep или rstep
-      to_stack(if_((opt==position[ps_stp]),ev_rld_dat+STP,ev_sav_pos+STP)+0,0) //to_stack(check_stp_limits), обработчик cycle как opt
+      to_stack(if_((opt==position[ps_stp]),ev_rld_dat+STP,ev_sav_pos+STP)+0,0)
+      to_stack(ev_get_pos+pr_stp,0) //--to_stack(check_stp_limits), обработчик cycle как opt
       dm = dm_stp
     end if
   //-------------------------------------------------------------
