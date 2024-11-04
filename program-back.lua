@@ -932,12 +932,13 @@ while(RES_STATE and st_top > 0) //stack machine
     run = opt 
     if(run) then
       position[pr_prg] = position[ps_prg]
+      sc_blk  [pr_prg] = NIL
       position[ps_stp] = if_((opt > run),position[ps_stp],0)
+      sc_blk  [ps_stp] = NIL
       to_stack(ev_sav_pos+STP,0) //--todo
       //--обнулить или загрузить счётчик времени. при обнулении надо сохранить в шаг
       //--при останове записать счётчик в шаг
     end if
-    dm = dm_prg | dm_stp //-- можно сделать эффективнее
   end if
   //-------------------------------------------------------------
   if(position[ps_prg] == position[pr_prg]and run) then
