@@ -619,7 +619,7 @@ while(RES_STATE and st_top > 0) //stack machine
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   p = evt -ev_set_pos*(evt <  ev_get_pos) //ev_set_pos = 1
   p = p   -ev_get_pos*(evt >= ev_get_pos) //ev_get_pos = 11
-  if(p >= pw_stp and p <= pr_prg ) then //-- todo; адванс при run кривой в логике или отображении, баганутое удаление в работе
+  if(p >= pw_stp and p <= pr_prg ) then
     TRACE("advance: [%d], opt :[%d]",p,opt)
     SEL = p/3 == pw_stp/3
     if(SEL == STP) then
@@ -643,7 +643,6 @@ while(RES_STATE and st_top > 0) //stack machine
     position[p] = opt
     sc_blk[p] = M_CUR_BLK[SEL]
     sp_blk[p] = M_PRV_BLK[SEL]
-    ps_stp = pw_stp +1 +(position[ps_prg] == position[pr_prg]and run) //-- todo; load from ui
     if(evt < ev_get_pos) then
       to_stack(pos_hdl[p],0)
     end if
@@ -764,7 +763,7 @@ while(RES_STATE and st_top > 0) //stack machine
       TRACE("stp blk cnt: [%d]",M_BLK_CNT[SEL])
       position[ps_stp] = position[ps_stp] -(opt < position[ps_stp]) //меняем либо sstep или rstep
       to_stack(if_((opt==position[ps_stp]),ev_rld_dat+STP,ev_sav_pos+STP)+0,0)
-      to_stack(ev_get_pos+pr_stp,0) //--to_stack(check_stp_limits), обработчик cycle как opt
+      //--to_stack(check_stp_limits), обработчик cycle как opt
       dm = dm_stp
     end if
   //-------------------------------------------------------------
@@ -817,9 +816,10 @@ while(RES_STATE and st_top > 0) //stack machine
     advance_s(COM_BLK_OFST)
     GetData(BUFF[0],"Local HMI","Program_window_updated_com",COM_REQ_SZ)
     load_store_data_s('S',0,COM_REQ_SZ)
-    if      (opt == position[ps_prg]) then
+    if(opt == position[ps_prg]) then
       SetData(BUFF[0],"Local HMI","Program_sel_com",COM_REQ_SZ)
-    else if (opt == position[pr_prg]) then
+    end if 
+    if(opt == position[pr_prg]) then
       SetData(BUFF[0],"Local HMI","Program_run_com",COM_REQ_SZ)
     end if  
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -    
@@ -850,7 +850,7 @@ while(RES_STATE and st_top > 0) //stack machine
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     //think about RP
-    load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST) //todo - prepare COM
+    load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST) //-- todo - prepare COM
     BUFF[0] = position[ps_stp]
     load_store_data_s('S',0,BLK_PLD_SZ*COM_BLK_OFST)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
@@ -932,12 +932,18 @@ while(RES_STATE and st_top > 0) //stack machine
     run = opt 
     if(run) then
       position[pr_prg] = position[ps_prg]
-      position[pr_stp] = if_((opt > run),position[ps_stp],0)
-      to_stack(ev_set_pos+STP,0) //--todo
+      position[ps_stp] = if_((opt > run),position[ps_stp],0)
+      to_stack(ev_sav_pos+STP,0) //--todo
       //--обнулить или загрузить счётчик времени. при обнулении надо сохранить в шаг
       //--при останове записать счётчик в шаг
     end if
-    dm = dm_prg | dm_stp
+    dm = dm_prg | dm_stp //-- можно сделать эффективнее
+  end if
+  //-------------------------------------------------------------
+  if(position[ps_prg] == position[pr_prg]and run) then
+       position[pr_stp] = position[ps_stp]
+       sc_blk  [pr_stp] = sc_blk  [ps_stp]
+       sp_blk  [pr_stp] = sp_blk  [ps_stp]
   end if
   //-------------------------------------------------------------
   if(dm) then

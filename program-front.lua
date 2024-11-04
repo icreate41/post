@@ -49,7 +49,7 @@ if     (evt == 10) then //advance window prg
   send_opt = opt
 else if(evt == 30) then
   if     (typ == 0) then //set prg
-    send_evt = ev_set_pos +if_((sel),ps_stp+run,ps_prg)
+    send_evt = ev_set_pos +if_((sel),ps_stp,ps_prg)
     send_opt = wndpos[sel] -selpos[sel] +opt
   else if(typ == 1) then //insert prg
     send_evt = ev_insert  +sel
