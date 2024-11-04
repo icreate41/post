@@ -20,8 +20,6 @@ short SEL=0,PRG=0,STP=1,LOC_OFST_HEAD=0,LOC_OFST_CNT=1
 short RES_BLK,DIR_LEFT = -1,DIR_RIGHT =1
 //-------------------------------------------------------------
 //COMMON
-int   COM_TIM
-short COM_POS,COM_REP
 bool  RES_STATE
 char  ev_tbl[64]
 short st_evt[16],st_opt[16],st_top = 0
@@ -481,7 +479,7 @@ int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40
 int ev_swap = 45,ev_control=55,ev_view = 60
 int dm = 0,dm_stp = 7,dm_prg = 56
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-int bits,p,k,evt = 0,opt = 0
+int tim,cc,bits,p,k,evt = 0,opt = 0
 short prg_wnd_dat = 510,stp_wnd_dat = 1000
 bool  run
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -519,6 +517,8 @@ if(INIT() == true) then
   set_ev_dep(ev_view    +STP   ,ev_get_pos +pw_stp)
   set_ev_dep(ev_view    +pr_stp,ev_get_pos +pr_stp)
   run = 0
+  tim = 0
+  cc  = 0
   //try to restore
   load_rp_s()
   if     (RESTORE&RP_DEL_BLK) then
@@ -935,6 +935,8 @@ while(RES_STATE and st_top > 0) //stack machine
       sc_blk  [pr_prg] = NIL
       position[ps_stp] = if_((opt > run),position[ps_stp],0)
       sc_blk  [ps_stp] = NIL
+      tim = 0
+      cc  = .. --todo
       to_stack(ev_sav_pos+STP,0) //--todo
       //--обнулить или загрузить счётчик времени. при обнулении надо сохранить в шаг
       //--при останове записать счётчик в шаг
