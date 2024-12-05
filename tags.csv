@@ -36,7 +36,7 @@ Program_window_view_string_9,Local HMI,LW,638,,Undesignated
 Program_window_view_string_10,Local HMI,LW,654,,Undesignated
 Program_window_updated_com,Local HMI,LW,700,,Undesignated
 Program_window_updated_stp,Local HMI,LW,800,,Undesignated
-Program_header,Local HMI,LW,900,,16-bit Signed,ConversionTag,16-bit Signed,,,15
+Program_header,Local HMI,LW,900,,16-bit Signed,ConversionTag,16-bit Signed,,,20
 Program_window_prg_elements,Local HMI,LW,900,,16-bit Unsigned
 Program_window_stp_elements,Local HMI,LW,901,,16-bit Unsigned
 Program_window_prg_begin,Local HMI,LW,902,,16-bit Unsigned

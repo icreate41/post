@@ -38,9 +38,9 @@ sub init_values()
   COM_BLK_CNT  = COM_BLK_CNT+COM_BLK_OFST
   BLK_CNT = 0
   RES_BLK = NIL
-  COM_TIM = 0
-  COM_POS = 0
-  COM_REP = 0
+  //COM_TIM = 0
+  //COM_POS = 0
+  //COM_REP = 0
   M_HEAD_LOC[PRG] = CFG_OFST +32 //тут два шорта, 1 - голова, 2 - количество блоков
   M_HEAD_LOC[STP] = CFG_OFST +34 //тут
   PRG_SEL_LOC     = CFG_OFST +36
@@ -203,7 +203,7 @@ sub update_retain_s()
     SetData(i,"Local HMI",LB,9029,1)
     //for i = 0 to 999
     //next
-    //DELAY(50) //todo: restore delay
+    //DELAY(50) //--todo: restore delay
 	i = 0
 	SetData(i,"Local HMI",LB,9029,1)
   end if
@@ -472,7 +472,7 @@ end sub
 //-------------------------------------------------------------
 macro_command main()
 //-------------------------------------------------------------
-short position[6],pos_hdl[6],sc_blk[6],sp_blk[6],header[15]
+short position[6],pos_hdl[6],sc_blk[6],sp_blk[6],header[20]
 int pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 int ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
 int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40
@@ -576,7 +576,7 @@ TRACE("PRG USER STP CNT: [%d]",M_BLK_CNT[SEL] -COM_BLK_CNT)
       new_block_s()
       set_block_s(RES_BLK)
       insert_node_s(RES_BLK)
-      load_stp_from_prg_s() //to stps
+      load_stp_from_prg_s() //--to stps
       SEL = STP
       M_HEAD_BLK[SEL] = NIL
       GetData(BUFF[0],"Local HMI","Program_default_stp",BLK_PLD_SZ)
@@ -831,9 +831,9 @@ while(RES_STATE and st_top > 0) //stack machine
     load_stp_from_prg_s()
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
-    load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST)
-    position[ps_stp] = BUFF[0]
-    position[pw_stp] = BUFF[0]
+    load_store_data_s('L',0,COM_ADD_SZ)
+    position[ps_stp] = BUFF[0] //-- загружаем позицию
+    position[pw_stp] = BUFF[0] //--
     advance_s(COM_BLK_OFST)
     load_store_data_s('L',0,COM_REQ_SZ)
     SetData(BUFF[0],"Local HMI","Program_sel_com",COM_REQ_SZ)
@@ -850,15 +850,15 @@ while(RES_STATE and st_top > 0) //stack machine
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
     //think about RP
-    load_store_data_s('L',0,BLK_PLD_SZ*COM_BLK_OFST) //-- todo - prepare COM
-    BUFF[0] = position[ps_stp]
-    load_store_data_s('S',0,BLK_PLD_SZ*COM_BLK_OFST)
+    load_store_data_s('L',0,COM_ADD_SZ) //-- todo - prepare COM
+    BUFF[0] = position[ps_stp] //--0 это текущий шаг, дальше идёт таймер и циклы..
+    load_store_data_s('S',0,COM_ADD_SZ)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   else if(evt == (ev_rld_dat +STP)) then //reload stp
     load_stp_from_prg_s()
     SEL = STP //to stp
     reload_node_s(M_HEAD_BLK[SEL],NIL)
-    //clear TIM, maybe save
+    //clear TIM, maybe save //--todo
     load_store_data_s('L',0,BLK_PLD_SZ)
   //-------------------------------------------------------------
   else if(evt == (ev_view +PRG)) then //view prg
@@ -868,9 +868,13 @@ while(RES_STATE and st_top > 0) //stack machine
       load_stp_from_prg_s()
       SEL = STP //to stp
       reload_node_s(M_HEAD_BLK[SEL],NIL)
+      load_store_data_s('L',0,COM_ADD_SZ) //--загрузка таймера, циклов
+      header[13] = BUFF[1] //--tim lo
+      header[14] = BUFF[2] //--tim hi
+      header[15] = BUFF[3] //--cc
       advance_s(COM_BLK_OFST)
       load_store_data_s('L',0,COM_REQ_SZ)
-      SetData(BUFF[0],"Local HMI",LW,COM_REQ_SZ*p +prg_wnd_dat,COM_REQ_SZ) //OUT
+      SetData(BUFF[0],"Local HMI",LW,COM_REQ_SZ*p +prg_wnd_dat,COM_REQ_SZ)
       TRACE("print prg!!!: [%d] : [%d,%d]",M_CUR_BLK[SEL],M_PRV_BLK[SEL],M_NXT_BLK[SEL])
       SEL = PRG
       advance_s(DIR_RIGHT)
@@ -883,6 +887,7 @@ while(RES_STATE and st_top > 0) //stack machine
     header[ 6] = position[pr_prg]
     header[ 8] = M_BLK_CNT[PRG]
     header[10] = position[ps_prg] -position[pw_prg]
+    header[12] = run
 
     //-- в функцию магию с битами
     //-- ~(-1 <<(p))
@@ -914,16 +919,15 @@ while(RES_STATE and st_top > 0) //stack machine
     header[ 7] = position[pr_stp]
     header[ 9] = M_BLK_CNT[STP] -COM_BLK_CNT
     header[11] = position[ps_stp] -position[pw_stp]
-    header[12] = run
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else if(evt == (ev_view +pr_stp)) then
     SEL = STP
     load_store_data_s('L',0,BLK_PLD_SZ)
     SetData(BUFF[0],"Local HMI","Program_run_stp",BLK_PLD_SZ)
     reload_node_s(M_HEAD_BLK[SEL],NIL)
-    //--todo ...
+    //--todo ... ??
     load_store_data_s('L',0,COM_ADD_SZ)
-    //--header[xx] = BUFF[yy] prg repeats and ...
+    //--header[xx] = BUFF[yy] prg repeats and ... сделано выше
     advance_s(COM_BLK_OFST)
     load_store_data_s('L',0,COM_REQ_SZ)
     SetData(BUFF[0],"Local HMI","Program_run_com",COM_REQ_SZ)
@@ -936,7 +940,7 @@ while(RES_STATE and st_top > 0) //stack machine
       position[ps_stp] = if_((opt > run),position[ps_stp],0)
       sc_blk  [ps_stp] = NIL
       tim = 0
-      cc  = .. --todo
+      //cc  = .. --todo
       to_stack(ev_sav_pos+STP,0) //--todo
       //--обнулить или загрузить счётчик времени. при обнулении надо сохранить в шаг
       //--при останове записать счётчик в шаг
@@ -960,7 +964,7 @@ while(RES_STATE and st_top > 0) //stack machine
   end if
 wend
 TRACE("OK = %d",RES_STATE)
-SetData(header[0],"Local HMI","Program_header",15)
+SetData(header[0],"Local HMI","Program_header",20)
 SetData(MAX_BLK_CNT,"Local HMI","Program_blk_info[0]",1)
 SetData(BLK_CNT    ,"Local HMI","Program_blk_info[1]",1)
 //-------------------------------------------------------------
