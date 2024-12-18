@@ -8,6 +8,7 @@ short buff[128],header[15],elmnts[2],wndpos[2],selpos[2],runpos[2],run
 int pw_stp=0,ps_stp=1,pr_stp=2,pw_prg=3,ps_prg=4,pr_prg=5
 int ev_set_pos = 1 ,ev_get_pos = 11,ev_insert  = 20,ev_erase = 25
 int ev_sav_pos = 30,ev_rld_dat = 35,ev_sav_dat = 40,ev_swap = 45
+int ev_sav_com = 65
 float f
 //-------------------------------------------------------------
 if(INIT() == true) then
@@ -43,7 +44,7 @@ if not(evt) then
   return
 end if
 //-------------------------------------------------------------
-TRACE("FRONT: EVT = [%d]:[%d]",evt,opt)
+//TRACE("FRONT: EVT = [%d]:[%d]",evt,opt)
 if     (evt == 10) then //advance window prg
   send_evt = ev_get_pos +if_((sel),pw_stp,pw_prg)
   send_opt = opt
@@ -72,12 +73,16 @@ else if(evt == 50) then
 else if(evt == 60) then
   sel = lim(opt,0,1)
   p = 11 +sel
-  SetData(p,"Local HMI",LW,3000,1)
+  SetData(p,"Local HMI",LW,3000,1) //-- ??
   p = selpos[sel] -wndpos[sel]
   if(p < 0 or p >= window_sz[sel]) then
     send_evt = ev_get_pos +if_((sel),pw_stp,pw_prg)
     send_opt = p
   end if
+else if(evt == 100) then //cc
+  send_evt = ev_sav_com + ps_prg
+  GetData(BUFF[0],"Local HMI",LW,4000,1)
+  send_opt = BUFF[0]
 end if
 //-------------------------------------------------------------
 if (sel == 0) then
